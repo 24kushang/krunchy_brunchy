@@ -1,4 +1,10 @@
-import pool from '../config/db';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { WhatsAppLog } from './whatsapp-log.entity';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 export interface WhatsAppPayload {
   recipient: string;
@@ -6,19 +12,48 @@ export interface WhatsAppPayload {
   templateType: 'OrderReceived' | 'OrderReady' | 'PaymentSuccess' | 'Promotion';
 }
 
-export class WhatsAppService {
-  private static async logMessage(recipient: string, message: string, templateType: string, status: 'Sent' | 'Failed'): Promise<void> {
+@Injectable()
+export class WhatsappService {
+  constructor(
+    @InjectRepository(WhatsAppLog)
+    private readonly logRepository: Repository<WhatsAppLog>,
+  ) {}
+
+  private mapLog(log: WhatsAppLog) {
+    if (!log) return null;
+    return {
+      id: log.id,
+      recipient: log.recipient,
+      message: log.message,
+      template_type: log.templateType,
+      status: log.status,
+      created_at: log.createdAt,
+    };
+  }
+
+  private async logMessage(recipient: string, message: string, templateType: string, status: 'Sent' | 'Failed'): Promise<void> {
     try {
-      await pool.query(
-        `INSERT INTO whatsapp_logs (recipient, message, template_type, status) VALUES ($1, $2, $3, $4)`,
-        [recipient, message, templateType, status]
-      );
+      const log = this.logRepository.create({
+        recipient,
+        message,
+        templateType: templateType as any,
+        status,
+      });
+      await this.logRepository.save(log);
     } catch (err) {
-      console.error('Error logging WhatsApp message to DB:', err);
+      console.error('[WhatsappService] Error logging WhatsApp message to DB:', err);
     }
   }
 
-  public static async sendMessage(payload: WhatsAppPayload): Promise<{ success: boolean; status: string; message: string }> {
+  async getLogs() {
+    const logs = await this.logRepository.find({
+      order: { id: 'DESC' },
+      take: 100,
+    });
+    return logs.map(log => this.mapLog(log));
+  }
+
+  async sendMessage(payload: WhatsAppPayload): Promise<{ success: boolean; status: string; message: string }> {
     const { recipient, message, templateType } = payload;
     const isSimulated = process.env.WHATSAPP_SIMULATE !== 'false';
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -30,7 +65,7 @@ export class WhatsAppService {
 
     // If simulating or keys are not provided, treat it as a success simulator
     if (isSimulated || !accountSid || !authToken || !fromPhone) {
-      console.log('[WhatsApp Service] Running in SIMULATION mode.');
+      console.log('[WhatsappService] Running in SIMULATION mode.');
       await this.logMessage(recipient, message, templateType, 'Sent');
       return {
         success: true,
@@ -70,7 +105,7 @@ export class WhatsAppService {
         message: 'Message sent successfully via Twilio'
       };
     } catch (err: any) {
-      console.error('[WhatsApp Service] Real message delivery failed:', err.message);
+      console.error('[WhatsappService] Real message delivery failed:', err.message);
       await this.logMessage(recipient, message, templateType, 'Failed');
       return {
         success: false,
@@ -81,7 +116,7 @@ export class WhatsAppService {
   }
 
   // Template 1: Order Confirmation (Pending status)
-  public static async sendOrderReceived(
+  async sendOrderReceived(
     customerName: string,
     contact: string,
     orderId: number,
@@ -97,7 +132,7 @@ export class WhatsAppService {
   }
 
   // Template 2: Ready to be Delivered / Delivered
-  public static async sendOrderReadyOrDelivered(
+  async sendOrderReadyOrDelivered(
     customerName: string,
     contact: string,
     orderId: number,
@@ -112,7 +147,7 @@ export class WhatsAppService {
   }
 
   // Template 3: Payment Successful
-  public static async sendPaymentSuccess(
+  async sendPaymentSuccess(
     customerName: string,
     contact: string,
     orderId: number,

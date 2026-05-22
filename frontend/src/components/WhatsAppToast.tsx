@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Paper, Box, Typography, IconButton } from '@mui/material';
 import { X, Send, CheckCheck } from 'lucide-react';
 
 export interface ToastMessage {
@@ -24,38 +25,93 @@ export const WhatsAppToast: React.FC<WhatsAppToastProps> = ({ toast, onClose }) 
   }, [toast.id, onClose]);
 
   return (
-    <div className="whatsapp-toast">
-      <div className="whatsapp-toast-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ backgroundColor: '#25d366', borderRadius: '50%', padding: '4px', display: 'flex' }}>
-            <Send size={12} color="white" />
-          </div>
-          <span>WhatsApp Alert ({toast.templateType})</span>
-        </div>
-        <button 
+    <Paper
+      elevation={6}
+      sx={{
+        width: 320,
+        backgroundColor: 'background.paper',
+        borderRadius: 3,
+        overflow: 'hidden',
+        border: '1px solid',
+        borderColor: 'divider',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: (theme) => 
+          theme.palette.mode === 'dark' 
+            ? '0 12px 32px rgba(0,0,0,0.5)' 
+            : '0 12px 32px rgba(148, 163, 184, 0.2)',
+        animation: 'slideIn 0.3s ease-out forwards',
+        mb: 1.5,
+      }}
+    >
+      {/* Header */}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          backgroundColor: '#075e54', // Classic WhatsApp dark green
+          color: 'white',
+          px: 2, 
+          py: 1 
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ backgroundColor: '#128c7e', borderRadius: '50%', p: 0.5, display: 'flex' }}>
+            <Send size={10} color="white" />
+          </Box>
+          <Typography variant="caption" sx={{ fontWeight: 650, letterSpacing: '0.03em' }}>
+            WhatsApp Log ({toast.templateType})
+          </Typography>
+        </Box>
+        <IconButton 
+          size="small" 
           onClick={() => onClose(toast.id)} 
-          style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex' }}
+          sx={{ color: 'rgba(255,255,255,0.8)', p: 0.2 }}
         >
           <X size={14} />
-        </button>
-      </div>
+        </IconButton>
+      </Box>
 
-      <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-        To: <span style={{ color: '#25d366' }}>{toast.recipient}</span>
-      </div>
+      {/* Content */}
+      <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+          To: <Box component="span" sx={{ color: '#25d366', fontWeight: 700 }}>{toast.recipient}</Box>
+        </Typography>
 
-      <div className="whatsapp-toast-msg">
-        {toast.message}
-      </div>
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            color: 'text.primary',
+            fontSize: '0.85rem',
+            whiteSpace: 'pre-wrap', 
+            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+            p: 1.25, 
+            borderRadius: 1.5, 
+            border: '1px solid',
+            borderColor: 'divider',
+            maxHeight: 120,
+            overflowY: 'auto'
+          }}
+        >
+          {toast.message}
+        </Typography>
 
-      <div className="whatsapp-toast-footer">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#25d366' }}>
-          <CheckCheck size={14} />
-          <span>{toast.status === 'Sent' || toast.status === 'Simulated' ? 'Delivered' : 'Delivery Pending'}</span>
-        </div>
-        <span>{toast.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-    </div>
+        {/* Footer */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: '#25d366' }}>
+            <CheckCheck size={14} />
+            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+              {toast.status === 'Sent' || toast.status === 'Simulated' ? 'Delivered' : 'Pending'}
+            </Typography>
+          </Box>
+          <Typography variant="caption" color="text.secondary">
+            {toast.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Typography>
+        </Box>
+      </Box>
+    </Paper>
   );
 };
+
 export default WhatsAppToast;

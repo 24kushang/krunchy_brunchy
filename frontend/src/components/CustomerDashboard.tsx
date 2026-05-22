@@ -1,13 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { api, Customer, CustomerAnalytics } from '../services/api';
-import { 
-  Users, 
-  MapPin, 
-  UserSquare2, 
-  MessageSquareShare, 
-  Loader, 
-  Search, 
-  Check, 
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  Button,
+  IconButton,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Checkbox,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  LinearProgress,
+  Chip,
+  CircularProgress,
+  InputAdornment,
+  Avatar
+} from '@mui/material';
+import {
+  Users,
+  MapPin,
+  MessageSquareShare,
+  Search,
   Send,
   X
 } from 'lucide-react';
@@ -23,7 +45,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onWhatsApp
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
-  
+
   // Promotion Modal States
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [promoMessage, setPromoMessage] = useState('');
@@ -58,7 +80,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onWhatsApp
   const handleSelectAll = (filteredCusts: Customer[]) => {
     const allFilteredContacts = filteredCusts.map(c => c.contact);
     const areAllSelected = allFilteredContacts.every(c => selectedContacts.includes(c));
-    
+
     if (areAllSelected) {
       // Unselect all filtered
       setSelectedContacts(selectedContacts.filter(c => !allFilteredContacts.includes(c)));
@@ -79,7 +101,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onWhatsApp
     setSendingPromo(true);
     try {
       const response = await api.sendWhatsAppPromotion(selectedContacts, promoMessage);
-      
+
       if (response.success) {
         // Trigger simulation toast showing dispatch message details
         onWhatsAppTriggered({
@@ -103,261 +125,363 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onWhatsApp
     }
   };
 
-  const filteredCustomers = customers.filter(c => 
+  const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.contact.includes(searchQuery) ||
     c.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Customer CRM & Analytics</h2>
-          <p className="subtitle" style={{ margin: 0 }}>Understand demographics, track top patrons, and broadcast promotional campaigns.</p>
-        </div>
-        
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Top Header Row */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+            Customer CRM & Analytics
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Understand demographics, track top patrons, and broadcast promotional campaigns.
+          </Typography>
+        </Box>
+
         {selectedContacts.length > 0 && (
-          <button 
-            className="btn btn-primary" 
+          <Button
+            variant="contained"
             onClick={() => setShowPromoModal(true)}
-            style={{ backgroundColor: '#25d366', color: 'white' }}
+            startIcon={<MessageSquareShare size={18} />}
+            sx={{
+              backgroundColor: '#25d366',
+              color: 'white',
+              '&:hover': {
+                backgroundColor: '#128c7e'
+              }
+            }}
           >
-            <MessageSquareShare size={16} />
-            <span>Send Promotion ({selectedContacts.length})</span>
-          </button>
+            Send Promotion ({selectedContacts.length})
+          </Button>
         )}
-      </div>
+      </Box>
 
       {loading && !analytics ? (
-        <div style={{ textAlign: 'center', padding: '3rem' }}>
-          <Loader className="animate-spin" size={32} style={{ color: 'var(--color-primary)' }} />
-        </div>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+          <CircularProgress size={36} color="primary" />
+        </Box>
       ) : (
         <>
           {/* Charts/Analytics Panel */}
           {analytics && (
-            <div className="analytics-grid">
+            <Grid container spacing={3}>
               {/* Total Summary CRM Panel */}
-              <div className="glass-panel" style={{ margin: 0, gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '2rem' }}>
-                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }}>Total Registered Customers</span>
-                  <span className="metric-value" style={{ fontSize: '3.5rem' }}>{analytics.totalCustomers}</span>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--color-primary)' }}>Top Spending Patrons</h3>
-                  <div className="data-table-wrapper">
-                    <table className="data-table" style={{ fontSize: '0.85rem' }}>
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Contact</th>
-                          <th>Orders</th>
-                          <th>Total Spent</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analytics.topCustomers?.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} style={{ textAlign: 'center', color: 'var(--color-text-dark)' }}>No orders logged yet</td>
-                          </tr>
-                        ) : (
-                          analytics.topCustomers?.map((tc, idx) => (
-                            <tr key={idx}>
-                              <td>{tc.name}</td>
-                              <td>{tc.contact}</td>
-                              <td>{tc.order_count}</td>
-                              <td style={{ color: 'var(--color-primary)', fontWeight: 600 }}>Rs. {parseFloat(tc.total_spent as any).toFixed(2)}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+              <Grid item xs={12} md={7}>
+                <Paper sx={{ p: 3, height: '100%', display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 3 }}>
+                  <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    borderRight: { xs: 'none', sm: '1px solid' },
+                    borderColor: 'divider',
+                    pr: { xs: 0, sm: 3 },
+                    pb: { xs: 2, sm: 0 },
+                    minWidth: 180
+                  }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                      Total Registered Customers
+                    </Typography>
+                    <Typography variant="h1" color="primary" sx={{ fontSize: '3.5rem', fontWeight: 800, mt: 0.5 }}>
+                      {analytics.totalCustomers}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+                    <Typography variant="subtitle2" color="primary.main" sx={{ fontWeight: 700, mb: 1.5 }}>
+                      Top Spending Patrons
+                    </Typography>
+                    <TableContainer sx={{ maxHeight: 150, overflowY: 'auto' }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ py: 0.75, fontSize: '0.8rem' }}>Name</TableCell>
+                            <TableCell sx={{ py: 0.75, fontSize: '0.8rem' }}>Contact</TableCell>
+                            <TableCell sx={{ py: 0.75, fontSize: '0.8rem' }}>Orders</TableCell>
+                            <TableCell sx={{ py: 0.75, fontSize: '0.8rem' }}>Total Spent</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {analytics.topCustomers?.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={4} align="center" sx={{ color: 'text.secondary', py: 2 }}>
+                                No orders logged yet
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            analytics.topCustomers?.map((tc, idx) => (
+                              <TableRow key={idx} hover>
+                                <TableCell sx={{ py: 0.75, fontSize: '0.8rem', fontWeight: 600 }}>{tc.name}</TableCell>
+                                <TableCell sx={{ py: 0.75, fontSize: '0.8rem' }}>{tc.contact}</TableCell>
+                                <TableCell sx={{ py: 0.75, fontSize: '0.8rem' }}>{tc.order_count}</TableCell>
+                                <TableCell sx={{ py: 0.75, fontSize: '0.8rem', color: 'primary.main', fontWeight: 700 }}>
+                                  Rs. {parseFloat(tc.total_spent as any).toFixed(2)}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                </Paper>
+              </Grid>
 
               {/* Geographic Analytics Chart */}
-              <div className="glass-panel" style={{ margin: 0 }}>
-                <h3>Location Demographics</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-                  {analytics.locations?.map((loc, idx) => {
-                    const percentage = analytics.totalCustomers > 0 ? (loc.value / analytics.totalCustomers) * 100 : 0;
-                    return (
-                      <div key={idx} className="bar-chart-row">
-                        <div className="bar-chart-labels">
-                          <span>{loc.label}</span>
-                          <span style={{ fontWeight: 600 }}>{loc.value} ({percentage.toFixed(0)}%)</span>
-                        </div>
-                        <div className="bar-chart-outer">
-                          <div className="bar-chart-inner" style={{ width: `${percentage}%`, backgroundColor: '#3b82f6' }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <Grid item xs={12} sm={6} md={2.5}>
+                <Paper sx={{ p: 3, height: '100%' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                    Location Demographics
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {analytics.locations?.map((loc, idx) => {
+                      const percentage = analytics.totalCustomers > 0 ? (loc.value / analytics.totalCustomers) * 100 : 0;
+                      return (
+                        <Box key={idx}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>{loc.label}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              {loc.value} ({percentage.toFixed(0)}%)
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={percentage}
+                            color="info"
+                            sx={{ height: 6, borderRadius: 3 }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Paper>
+              </Grid>
 
               {/* Gender Representation Panel */}
-              <div className="glass-panel" style={{ margin: 0 }}>
-                <h3>Gender Splits</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-                  {analytics.genders?.map((gen, idx) => {
-                    const percentage = analytics.totalCustomers > 0 ? (gen.value / analytics.totalCustomers) * 100 : 0;
-                    return (
-                      <div key={idx} className="bar-chart-row">
-                        <div className="bar-chart-labels">
-                          <span>{gen.label}</span>
-                          <span style={{ fontWeight: 600 }}>{gen.value} ({percentage.toFixed(0)}%)</span>
-                        </div>
-                        <div className="bar-chart-outer">
-                          <div className="bar-chart-inner" style={{ width: `${percentage}%`, backgroundColor: '#f59e0b' }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+              <Grid item xs={12} sm={6} md={2.5}>
+                <Paper sx={{ p: 3, height: '100%' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                    Gender Splits
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {analytics.genders?.map((gen, idx) => {
+                      const percentage = analytics.totalCustomers > 0 ? (gen.value / analytics.totalCustomers) * 100 : 0;
+                      return (
+                        <Box key={idx}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>{gen.label}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              {gen.value} ({percentage.toFixed(0)}%)
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={percentage}
+                            color="warning"
+                            sx={{ height: 6, borderRadius: 3 }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Paper>
+              </Grid>
+            </Grid>
           )}
 
           {/* CRM List View */}
-          <div className="glass-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-              <h3>Customer CRM Registry</h3>
-              
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '300px' }}>
-                <input
-                  type="text"
-                  placeholder="Filter by name, phone, city..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: '100%', paddingLeft: '2.5rem', paddingRight: '1rem' }}
-                />
-                <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--color-text-dark)' }} />
-              </div>
-            </div>
+          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                Customer CRM Registry
+              </Typography>
 
-            <div className="data-table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}>
-                      <input
-                        type="checkbox"
+              <TextField
+                size="small"
+                placeholder="Filter by name, phone, city..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{ width: { xs: '100%', sm: 300 } }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={16} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        indeterminate={selectedContacts.length > 0 && selectedContacts.length < filteredCustomers.length}
                         checked={filteredCustomers.length > 0 && filteredCustomers.every(c => selectedContacts.includes(c.contact))}
                         onChange={() => handleSelectAll(filteredCustomers)}
                       />
-                    </th>
-                    <th>Client Profile</th>
-                    <th>Contact Info</th>
-                    <th>Gender</th>
-                    <th>City / Location</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableCell>
+                    <TableCell>Client Profile</TableCell>
+                    <TableCell>Contact Info</TableCell>
+                    <TableCell>Gender</TableCell>
+                    <TableCell>City / Location</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {filteredCustomers.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-dark)', padding: '2rem' }}>
+                    <TableRow>
+                      <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                         No customers matched filter criteria.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
-                    filteredCustomers.map(cust => (
-                      <tr key={cust.id} style={{ backgroundColor: selectedContacts.includes(cust.contact) ? 'rgba(37, 211, 102, 0.03)' : '' }}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selectedContacts.includes(cust.contact)}
-                            onChange={() => handleSelectToggle(cust.contact)}
-                          />
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Users size={16} color="var(--color-primary)" />
-                            </div>
-                            <span style={{ fontWeight: 600 }}>{cust.name}</span>
-                          </div>
-                        </td>
-                        <td style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{cust.contact}</td>
-                        <td>{cust.gender}</td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>
-                            <MapPin size={14} color="var(--color-text-dark)" />
-                            <span>{cust.location}</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                    filteredCustomers.map(cust => {
+                      const isSelected = selectedContacts.includes(cust.contact);
+                      return (
+                        <TableRow
+                          key={cust.id}
+                          hover
+                          selected={isSelected}
+                          sx={{
+                            '&.Mui-selected': {
+                              backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(37, 211, 102, 0.05)' : 'rgba(37, 211, 102, 0.03)',
+                              '&:hover': {
+                                backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(37, 211, 102, 0.08)' : 'rgba(37, 211, 102, 0.05)',
+                              }
+                            }
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={() => handleSelectToggle(cust.contact)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                              <Avatar sx={{ width: 32, height: 32, bgcolor: 'action.hover', color: 'primary.main' }}>
+                                <Users size={16} />
+                              </Avatar>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                {cust.name}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell sx={{ color: 'primary.main', fontWeight: 600 }}>
+                            {cust.contact}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {cust.gender}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
+                              <MapPin size={14} />
+                              <Typography variant="body2">
+                                {cust.location}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
         </>
       )}
 
-      {/* Promotion Blast Modal */}
-      {showPromoModal && (
-        <div className="modal-overlay" onClick={() => setShowPromoModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowPromoModal(false)}>
-              <X size={20} />
-            </button>
-            
-            <h2>WhatsApp Promotion Blast</h2>
-            <p className="subtitle">Send custom notifications, launch promotions, or broadcast campaign deals.</p>
+      {/* Promotion Blast Modal Dialog */}
+      <Dialog
+        open={showPromoModal}
+        onClose={() => setShowPromoModal(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, p: 1 }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            WhatsApp Promotion Blast
+          </Typography>
+          <IconButton onClick={() => setShowPromoModal(false)} size="small">
+            <X size={20} />
+          </IconButton>
+        </DialogTitle>
 
-            <form onSubmit={handleSendPromotion}>
-              <div className="form-grid">
-                <div className="form-group full-width" style={{ backgroundColor: 'rgba(37, 211, 102, 0.05)', border: '1px solid rgba(37, 211, 102, 0.2)', padding: '1rem', borderRadius: '8px' }}>
-                  <span style={{ fontWeight: 600, color: '#25d366' }}>Campaign targets: {selectedContacts.length} Recipients selected</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '0.5rem', maxHeight: '80px', overflowY: 'auto' }}>
-                    {selectedContacts.map((contact, idx) => (
-                      <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: '4px' }}>{contact}</span>
-                    ))}
-                  </div>
-                </div>
+        <DialogContent sx={{ px: 3, pb: 1, pt: 0 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Send custom notifications, launch promotions, or broadcast campaign deals.
+          </Typography>
 
-                <div className="form-group full-width">
-                  <label htmlFor="promo-message">WhatsApp Broadcast Body *</label>
-                  <textarea
-                    id="promo-message"
-                    rows={6}
-                    placeholder="Hi {Name},\n\nCheck out our weekend special: Buy 2 cookies, get 1 classic biscuit free! 🍪\nUse code KRUNCHY🍪"
-                    value={promoMessage}
-                    onChange={(e) => setPromoMessage(e.target.value)}
-                    required
+          <Box component="form" onSubmit={handleSendPromotion} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Targets selection list */}
+            <Box sx={{
+              backgroundColor: 'rgba(37, 211, 102, 0.05)',
+              border: '1px solid rgba(37, 211, 102, 0.2)',
+              p: 2,
+              borderRadius: 2
+            }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#25d366' }}>
+                Campaign targets: {selectedContacts.length} Recipients selected
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1, maxHeight: '80px', overflowY: 'auto' }}>
+                {selectedContacts.map((contact, idx) => (
+                  <Chip
+                    key={idx}
+                    label={contact}
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: '0.75rem', height: '22px' }}
                   />
-                </div>
+                ))}
+              </Box>
+            </Box>
 
-                <div className="form-group full-width" style={{ marginTop: '0.5rem' }}>
-                  <button 
-                    type="submit" 
-                    className="btn btn-primary" 
-                    style={{ width: '100%', justifyContent: 'center', backgroundColor: '#25d366', color: 'white' }}
-                    disabled={sendingPromo}
-                  >
-                    {sendingPromo ? (
-                      <>
-                        <Loader className="animate-spin" size={18} />
-                        <span>Broadcasting Campaign...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send size={18} />
-                        <span>Dispatch Broadcast Message</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+            <TextField
+              required
+              fullWidth
+              multiline
+              rows={5}
+              label="WhatsApp Broadcast Body"
+              placeholder={`Hi {Name},\n\nCheck out our weekend special: Buy 2 cookies, get 1 classic biscuit free! 🍪\nUse code KRUNCHY🍪`}
+              value={promoMessage}
+              onChange={(e) => setPromoMessage(e.target.value)}
+            />
+
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={sendingPromo}
+              startIcon={sendingPromo ? <CircularProgress size={16} color="inherit" /> : <Send size={18} />}
+              sx={{
+                width: '100%',
+                py: 1.25,
+                backgroundColor: '#25d366',
+                color: 'white',
+                '&:hover': {
+                  backgroundColor: '#128c7e'
+                },
+                mt: 1
+              }}
+            >
+              {sendingPromo ? 'Broadcasting Campaign...' : 'Dispatch Broadcast Message'}
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </Box>
   );
 };
+
 export default CustomerDashboard;

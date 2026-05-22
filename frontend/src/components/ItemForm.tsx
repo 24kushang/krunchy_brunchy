@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { api, Item } from '../services/api';
-import { PlusCircle, Save, Loader } from 'lucide-react';
+import {
+  Box,
+  TextField,
+  MenuItem,
+  Button,
+  Typography,
+  CircularProgress,
+  Paper
+} from '@mui/material';
+import { PlusCircle, Save } from 'lucide-react';
 
 interface ItemFormProps {
   initialItem?: Item | null;
@@ -91,99 +100,100 @@ export const ItemForm: React.FC<ItemFormProps> = ({ initialItem, onSuccess }) =>
     }
   };
 
+  const bestBeforeOptions = [
+    '5 Days',
+    '7 Days',
+    '10 Days',
+    '15 Days',
+    '30 Days',
+    '3 Months'
+  ];
+
   return (
-    <div className="glass-panel" style={{ marginBottom: 0 }}>
-      <h2>{initialItem ? 'Edit Item Details' : 'Create New Catalog Item'}</h2>
-      <p className="subtitle" style={{ marginBottom: '1.5rem' }}>
-        {initialItem ? 'Update details in the catalog' : 'Define cookies, biscuits, and ingredients for the product catalog.'}
-      </p>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+        {initialItem ? 'Edit Item Details' : 'Create New Catalog Item'}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {initialItem
+          ? 'Update details in the catalog'
+          : 'Define cookies, biscuits, and ingredients for the product catalog.'}
+      </Typography>
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="item-name">Item Name *</label>
-            <input
-              id="item-name"
-              type="text"
-              placeholder="e.g. Chocolate Crunch Cookie"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+          <TextField
+            fullWidth
+            required
+            label="Item Name"
+            placeholder="e.g. Chocolate Crunch Cookie"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
 
-          <div className="form-group">
-            <label htmlFor="item-price">Unit Price (INR) *</label>
-            <input
-              id="item-price"
-              type="number"
-              step="0.01"
-              placeholder="e.g. 120.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              required
-            />
-          </div>
+          <TextField
+            fullWidth
+            required
+            type="number"
+            label="Unit Price (INR)"
+            placeholder="e.g. 120.00"
+            inputProps={{ step: '0.01', min: '0' }}
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </Box>
 
-          <div className="form-group full-width">
-            <label htmlFor="item-ingredients">Ingredients (Comma Separated) *</label>
-            <textarea
-              id="item-ingredients"
-              rows={2}
-              placeholder="e.g. Chocolate Chips, Flour, Butter, Sugar"
-              value={ingredients}
-              onChange={(e) => setIngredients(e.target.value)}
-              required
-            />
-          </div>
+        <TextField
+          fullWidth
+          required
+          multiline
+          rows={2}
+          label="Ingredients (Comma Separated)"
+          placeholder="e.g. Chocolate Chips, Flour, Butter, Sugar"
+          value={ingredients}
+          onChange={(e) => setIngredients(e.target.value)}
+        />
 
-          <div className="form-group">
-            <label htmlFor="item-expiry">Best Before Duration *</label>
-            <select
-              id="item-expiry"
-              value={bestBefore}
-              onChange={(e) => setBestBefore(e.target.value)}
-            >
-              <option value="5 Days">5 Days</option>
-              <option value="7 Days">7 Days</option>
-              <option value="10 Days">10 Days</option>
-              <option value="15 Days">15 Days</option>
-              <option value="30 Days">30 Days</option>
-              <option value="3 Months">3 Months</option>
-            </select>
-          </div>
+        <TextField
+          fullWidth
+          select
+          required
+          label="Best Before Duration"
+          value={bestBefore}
+          onChange={(e) => setBestBefore(e.target.value)}
+        >
+          {bestBeforeOptions.map((opt) => (
+            <MenuItem key={opt} value={opt}>
+              {opt}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          <div className="form-group full-width" style={{ marginTop: '0.5rem' }}>
-            {error && <div style={{ color: 'var(--status-cancelled)', fontSize: '0.9rem', fontWeight: 500 }}>{error}</div>}
-            {successMsg && <div style={{ color: 'var(--status-ready)', fontSize: '0.9rem', fontWeight: 500 }}>{successMsg}</div>}
-            
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ alignSelf: 'flex-start', marginTop: '0.5rem' }}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader className="animate-spin" size={18} />
-                  <span>Saving...</span>
-                </>
-              ) : initialItem ? (
-                <>
-                  <Save size={18} />
-                  <span>Update Item</span>
-                </>
-              ) : (
-                <>
-                  <PlusCircle size={18} />
-                  <span>Add Item to Catalog</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
+        {error && (
+          <Typography color="error" variant="body2" sx={{ fontWeight: 600 }}>
+            {error}
+          </Typography>
+        )}
+
+        {successMsg && (
+          <Typography color="success.main" variant="body2" sx={{ fontWeight: 600 }}>
+            {successMsg}
+          </Typography>
+        )}
+
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          disabled={loading}
+          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : (initialItem ? <Save size={18} /> : <PlusCircle size={18} />)}
+          sx={{ alignSelf: 'flex-start', mt: 1 }}
+        >
+          {loading ? 'Saving...' : (initialItem ? 'Update Item' : 'Add Item to Catalog')}
+        </Button>
+      </Box>
+    </Box>
   );
 };
+
 export default ItemForm;

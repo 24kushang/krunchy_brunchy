@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { api, WhatsAppLog } from '../services/api';
-import { RefreshCw, Search, Send, Clock, Loader } from 'lucide-react';
+import {
+  Box,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  TextField,
+  Typography,
+  Button,
+  Chip,
+  CircularProgress,
+  InputAdornment
+} from '@mui/material';
+import { RefreshCw, Search, Clock } from 'lucide-react';
 
 export const WhatsAppLogs: React.FC = () => {
   const [logs, setLogs] = useState<WhatsAppLog[]>([]);
@@ -23,113 +39,154 @@ export const WhatsAppLogs: React.FC = () => {
     loadLogs();
   }, []);
 
-  const getTemplateBadgeClass = (type: WhatsAppLog['template_type']) => {
+  const getTemplateChipColor = (type: WhatsAppLog['template_type']) => {
     switch (type) {
-      case 'OrderReceived': return 'badge badge-pending';
-      case 'OrderReady': return 'badge badge-ready';
-      case 'PaymentSuccess': return 'badge badge-delivered';
-      case 'Promotion': return 'badge badge-preparing';
-      default: return 'badge';
+      case 'OrderReceived': return 'warning';
+      case 'OrderReady': return 'success';
+      case 'PaymentSuccess': return 'secondary';
+      case 'Promotion': return 'info';
+      default: return 'default';
     }
   };
 
-  const getStatusBadgeClass = (status: WhatsAppLog['status']) => {
+  const getStatusChipColor = (status: WhatsAppLog['status']) => {
     switch (status) {
-      case 'Sent': return 'badge badge-ready';
-      case 'Failed': return 'badge badge-cancelled';
-      case 'Pending': return 'badge badge-pending';
-      default: return 'badge';
+      case 'Sent':
+      case 'Simulated':
+        return 'success';
+      case 'Failed': return 'error';
+      case 'Pending': return 'warning';
+      default: return 'default';
     }
   };
 
-  const filteredLogs = logs.filter(log => 
+  const filteredLogs = logs.filter(log =>
     log.recipient.includes(searchQuery) ||
     log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
     log.template_type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>WhatsApp Communications Outbox</h2>
-          <p className="subtitle" style={{ margin: 0 }}>Review automatic system notifications and marketing broadcasts sent to clients.</p>
-        </div>
-        <button className="btn btn-secondary" onClick={loadLogs} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh Logs</span>
-        </button>
-      </div>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+            WhatsApp Communications Outbox
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Review automatic system notifications and marketing broadcasts sent to clients.
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          color="inherit"
+          onClick={loadLogs}
+          disabled={loading}
+          startIcon={<RefreshCw size={16} className={loading ? 'animate-spin' : ''} />}
+        >
+          Refresh Logs
+        </Button>
+      </Box>
 
-      <div className="glass-panel">
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <input
-            type="text"
-            placeholder="Search by recipient phone number or message content..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: '100%', paddingLeft: '2.5rem' }}
-          />
-          <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--color-text-dark)' }} />
-        </div>
+      {/* Main Panel */}
+      <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search by recipient phone number or message content..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search size={16} />
+              </InputAdornment>
+            ),
+          }}
+        />
 
         {loading && logs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem' }}>
-            <Loader className="animate-spin" size={32} style={{ color: 'var(--color-primary)' }} />
-          </div>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+            <CircularProgress size={36} color="primary" />
+          </Box>
         ) : (
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Timestamp</th>
-                  <th>Recipient</th>
-                  <th>Template Type</th>
-                  <th>Message Preview</th>
-                  <th>Delivery Status</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Timestamp</TableCell>
+                  <TableCell>Recipient</TableCell>
+                  <TableCell>Template Type</TableCell>
+                  <TableCell>Message Preview</TableCell>
+                  <TableCell>Delivery Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {filteredLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-dark)', padding: '2rem' }}>
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                       No communication logs found.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filteredLogs.map(log => (
-                    <tr key={log.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                          <Clock size={12} color="var(--color-text-dark)" />
-                          <span>{new Date(log.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}</span>
-                        </div>
-                      </td>
-                      <td style={{ fontWeight: 600, color: 'var(--color-primary)' }}>{log.recipient}</td>
-                      <td>
-                        <span className={getTemplateBadgeClass(log.template_type)}>
-                          {log.template_type}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ fontSize: '0.85rem', whiteSpace: 'pre-wrap', maxWidth: '400px', maxHeight: '80px', overflowY: 'auto', backgroundColor: 'rgba(0,0,0,0.15)', padding: '8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.02)' }}>
+                    <TableRow key={log.id} hover>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
+                          <Clock size={12} />
+                          <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                            {new Date(log.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'primary.main' }}>
+                        {log.recipient}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.template_type}
+                          color={getTemplateChipColor(log.template_type)}
+                          size="small"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{
+                            fontSize: '0.85rem',
+                            whiteSpace: 'pre-wrap',
+                            maxWidth: '400px',
+                            maxHeight: '80px',
+                            overflowY: 'auto',
+                            backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                            p: 1.25,
+                            borderRadius: 1.5,
+                            border: '1px solid',
+                            borderColor: 'divider'
+                          }}
+                        >
                           {log.message}
-                        </div>
-                      </td>
-                      <td>
-                        <span className={getStatusBadgeClass(log.status)}>
-                          {log.status}
-                        </span>
-                      </td>
-                    </tr>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={log.status}
+                          color={getStatusChipColor(log.status)}
+                          size="small"
+                          sx={{ fontWeight: 650 }}
+                        />
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
-      </div>
-    </div>
+      </Paper>
+    </Box>
   );
 };
+
 export default WhatsAppLogs;

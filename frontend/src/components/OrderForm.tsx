@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { api, Item, Customer } from '../services/api';
-import { 
-  Search, 
-  ShoppingCart, 
-  Trash2, 
-  Calendar, 
-  MapPin, 
-  Layers, 
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  TextField,
+  MenuItem,
+  Button,
+  IconButton,
+  CircularProgress,
+  Divider,
+  List,
+  ListItemText,
+  ListItemButton,
+  Card,
+  CardContent,
+  InputAdornment,
+  Avatar
+} from '@mui/material';
+import {
+  Search,
+  ShoppingCart,
+  Trash2,
   Send,
-  Loader,
   Plus,
   Minus
 } from 'lucide-react';
@@ -198,7 +213,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ onOrderCreated }) => {
         setCustLocation('');
         setDeliveryLocation('');
         setExpectedDate('');
-        
+
         let newToast: ToastMessage | undefined = undefined;
         if (response.whatsapp) {
           newToast = {
@@ -220,319 +235,418 @@ export const OrderForm: React.FC<OrderFormProps> = ({ onOrderCreated }) => {
     }
   };
 
-  const filteredItems = items.filter(item => 
+  const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(itemQuery.toLowerCase())
   );
 
+  const orderSources = ['WhatsApp', 'Instagram', 'Website', 'Walk-in', 'Referral', 'Other'];
+  const genderOptions = ['Male', 'Female', 'Other', 'Prefer Not to Say'];
+
   return (
-    <div className="glass-panel">
-      <h2>Create New Order</h2>
-      <p className="subtitle">Form to record customer details, browse the catalog, and schedule deliveries.</p>
+    <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+        Create New Order
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Form to record customer details, browse the catalog, and schedule deliveries.
+      </Typography>
 
-      <form onSubmit={handleSubmitOrder}>
-        {/* Customer Asynchronous Selection Panel */}
-        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--color-primary)' }}>1. Customer Details</h3>
-          
-          <div className="form-grid">
-            <div className="form-group autocomplete-wrapper">
-              <label>Search Existing Customer (Phone / Name)</label>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="text"
-                  placeholder="Type contact number or name..."
-                  value={customerSearch}
-                  onChange={(e) => {
-                    setCustomerSearch(e.target.value);
-                    if (!e.target.value) {
-                      setSelectedCustomerId(undefined);
-                      setIsNewCustomer(true);
-                    }
-                  }}
-                  onFocus={() => setShowCustDropdown(true)}
-                />
-                {searchingCustomer ? (
-                  <Loader className="animate-spin" size={18} style={{ position: 'absolute', right: '12px', color: 'var(--color-text-dark)' }} />
-                ) : (
-                  <Search size={18} style={{ position: 'absolute', right: '12px', color: 'var(--color-text-dark)' }} />
-                )}
-              </div>
+      <Box component="form" onSubmit={handleSubmitOrder} sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
 
+        {/* Section 1: Customer Details */}
+        <Box>
+          <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, mb: 2 }}>
+            1. Customer Details
+          </Typography>
+
+          <Grid container spacing={2.5}>
+            {/* Customer Search / Autocomplete Field */}
+            <Grid item xs={12} sm={isNewCustomer ? 12 : 6} sx={{ position: 'relative' }}>
+              <TextField
+                fullWidth
+                label="Search Existing Customer (Phone / Name)"
+                placeholder="Type contact number or name..."
+                value={customerSearch}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value);
+                  if (!e.target.value) {
+                    setSelectedCustomerId(undefined);
+                    setIsNewCustomer(true);
+                  }
+                }}
+                onFocus={() => setShowCustDropdown(true)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {searchingCustomer ? <CircularProgress size={16} /> : <Search size={16} />}
+                    </InputAdornment>
+                  )
+                }}
+              />
+
+              {/* Autocomplete Dropdown List */}
               {showCustDropdown && customerSearch.trim() && (
-                <div className="autocomplete-dropdown">
-                  {searchedCustomers.map(cust => (
-                    <div 
-                      key={cust.id} 
-                      className="autocomplete-option"
-                      onClick={() => handleSelectCustomer(cust)}
+                <Paper
+                  elevation={3}
+                  sx={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 20,
+                    right: 0,
+                    zIndex: 10,
+                    mt: 0.5,
+                    maxHeight: 250,
+                    overflowY: 'auto',
+                    border: '1px solid',
+                    borderColor: 'divider'
+                  }}
+                >
+                  <List disablePadding>
+                    {searchedCustomers.map(cust => (
+                      <ListItemButton
+                        key={cust.id}
+                        onClick={() => handleSelectCustomer(cust)}
+                        divider
+                      >
+                        <ListItemText
+                          primary={cust.name}
+                          secondary={`${cust.contact} • ${cust.location}`}
+                          primaryTypographyProps={{ fontWeight: 600, fontSize: '0.9rem' }}
+                          secondaryTypographyProps={{ fontSize: '0.8rem' }}
+                        />
+                      </ListItemButton>
+                    ))}
+
+                    <ListItemButton
+                      onClick={handleCreateNewCustomerTrigger}
+                      sx={{ color: 'primary.main', fontWeight: 700 }}
                     >
-                      <div className="autocomplete-option-name">{cust.name}</div>
-                      <div className="autocomplete-option-details">{cust.contact} • {cust.location}</div>
-                    </div>
-                  ))}
-                  
-                  <div 
-                    className="autocomplete-option" 
-                    style={{ fontWeight: 600, color: 'var(--color-primary)', borderTop: '1px solid var(--border-color)' }}
-                    onClick={handleCreateNewCustomerTrigger}
-                  >
-                    + Add "{customerSearch}" as a New Customer
-                  </div>
-                </div>
+                      <ListItemText
+                        primary={`+ Add "${customerSearch}" as a New Customer`}
+                        primaryTypographyProps={{ fontWeight: 700, fontSize: '0.9rem' }}
+                      />
+                    </ListItemButton>
+                  </List>
+                </Paper>
               )}
-            </div>
+            </Grid>
 
             {/* Read-only / Autofilled or inputs for New Customer */}
             {isNewCustomer ? (
               <>
-                <div className="form-group">
-                  <label>New Customer Name *</label>
-                  <input
-                    type="text"
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    required
+                    label="New Customer Name"
                     placeholder="Full Name"
                     value={custName}
                     onChange={(e) => setCustName(e.target.value)}
-                    required={isNewCustomer}
                   />
-                </div>
-                <div className="form-group">
-                  <label>Contact Number (WhatsApp format: +91...) *</label>
-                  <input
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    required
                     type="tel"
+                    label="Contact Number (WhatsApp format)"
                     placeholder="+91XXXXXXXXXX"
                     value={custContact}
                     onChange={(e) => setCustContact(e.target.value)}
-                    required={isNewCustomer}
                   />
-                </div>
-                <div className="form-group">
-                  <label>Gender</label>
-                  <select
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Gender"
                     value={custGender}
                     onChange={(e) => setCustGender(e.target.value as Customer['gender'])}
                   >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                    <option value="Prefer Not to Say">Prefer Not to Say</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>City / Location *</label>
-                  <input
-                    type="text"
+                    {genderOptions.map(opt => (
+                      <MenuItem key={opt} value={opt}>
+                        {opt}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    required
+                    label="City / Location"
                     placeholder="e.g. Mumbai"
                     value={custLocation}
                     onChange={(e) => setCustLocation(e.target.value)}
-                    required={isNewCustomer}
                   />
-                </div>
+                </Grid>
               </>
             ) : (
-              <div style={{ gridColumn: 'span 1', display: 'flex', flexDirection: 'column', gap: '0.25rem', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Selected Profile</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{custName}</div>
-                <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)' }}>{custContact}</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Location: {custLocation}</div>
-                <button 
-                  type="button" 
-                  style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: 'red', fontSize: '0.75rem', cursor: 'pointer', marginTop: '0.5rem', textDecoration: 'underline' }}
-                  onClick={() => {
-                    setIsNewCustomer(true);
-                    setSelectedCustomerId(undefined);
-                    setCustomerSearch('');
-                    setCustName('');
-                    setCustContact('');
-                    setCustLocation('');
-                  }}
-                >
-                  Clear Selection
-                </button>
-              </div>
+              <Grid item xs={12} sm={6}>
+                <Card variant="outlined" sx={{ bgcolor: 'action.hover', borderRadius: 2 }}>
+                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase' }}>
+                      Selected Profile
+                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                      {custName}
+                    </Typography>
+                    <Typography variant="body2" color="primary.main" sx={{ fontWeight: 650 }}>
+                      {custContact}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Location: {custLocation}
+                    </Typography>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => {
+                        setIsNewCustomer(true);
+                        setSelectedCustomerId(undefined);
+                        setCustomerSearch('');
+                        setCustName('');
+                        setCustContact('');
+                        setCustLocation('');
+                      }}
+                      sx={{ mt: 1.5, p: 0, textTransform: 'none', fontWeight: 600, minWidth: 0 }}
+                    >
+                      Clear Selection
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
             )}
-          </div>
-        </div>
+          </Grid>
+        </Box>
 
-        {/* E-commerce Item Selection */}
-        <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--color-primary)' }}>2. Item Catalog Selection</h3>
-          
-          <div className="catalog-container">
+        <Divider />
+
+        {/* Section 2: E-commerce Item Selection */}
+        <Box>
+          <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, mb: 2 }}>
+            2. Item Catalog Selection
+          </Typography>
+
+          <Grid container spacing={3}>
             {/* Catalog Grid */}
-            <div>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
-                <input
-                  type="text"
-                  placeholder="Filter items..."
-                  value={itemQuery}
-                  onChange={(e) => setItemQuery(e.target.value)}
-                  style={{ width: '100%', paddingLeft: '2.5rem' }}
-                />
-                <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--color-text-dark)' }} />
-              </div>
+            <Grid item xs={12} md={7.5}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Filter items..."
+                value={itemQuery}
+                onChange={(e) => setItemQuery(e.target.value)}
+                sx={{ mb: 2 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={16} />
+                    </InputAdornment>
+                  )
+                }}
+              />
 
               {loadingItems ? (
-                <div style={{ textAlign: 'center', padding: '2rem' }}>
-                  <Loader className="animate-spin" size={24} style={{ color: 'var(--color-primary)' }} />
-                </div>
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                  <CircularProgress size={28} />
+                </Box>
               ) : (
-                <div className="item-catalog-grid">
+                <Grid container spacing={1.5} sx={{ maxHeight: 320, overflowY: 'auto', pr: 0.5 }}>
                   {filteredItems.map(item => (
-                    <div key={item.id} className="catalog-card">
-                      <div className="catalog-card-icon">🍪</div>
-                      <div className="catalog-card-name">{item.name}</div>
-                      <div className="catalog-card-price">Rs. {item.price}</div>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                        onClick={() => addToCart(item)}
+                    <Grid item xs={12} sm={6} key={item.id}>
+                      <Card
+                        variant="outlined"
+                        sx={{
+                          p: 1.5,
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          borderRadius: 2
+                        }}
                       >
-                        Add to Order
-                      </button>
-                    </div>
+                        <Avatar sx={{ width: 32, height: 32, fontSize: '1rem', bgcolor: 'transparent' }}>
+                          🍪
+                        </Avatar>
+                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+                            {item.name}
+                          </Typography>
+                          <Typography variant="caption" color="primary.main" sx={{ fontWeight: 700 }}>
+                            Rs. {item.price}
+                          </Typography>
+                        </Box>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => addToCart(item)}
+                          sx={{ py: 0.25, px: 1, fontSize: '0.75rem', textTransform: 'none' }}
+                        >
+                          Add
+                        </Button>
+                      </Card>
+                    </Grid>
                   ))}
-                </div>
+                </Grid>
               )}
-            </div>
+            </Grid>
 
-            {/* Shopping Cart pane */}
-            <div className="cart-pane">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.75rem' }}>
-                <ShoppingCart size={18} />
-                <span style={{ fontWeight: 700 }}>Order Items ({cart.length})</span>
-              </div>
+            {/* Shopping Cart Pane */}
+            <Grid item xs={12} md={4.5}>
+              <Paper variant="outlined" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', gap: 1.5, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ShoppingCart size={18} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
+                    Order Items ({cart.length})
+                  </Typography>
+                </Box>
 
-              <div className="cart-items-list">
-                {cart.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--color-text-dark)', padding: '2rem 0', fontSize: '0.9rem' }}>
-                    Cart is empty. Select items from the catalog.
-                  </div>
-                ) : (
-                  cart.map(cartItem => (
-                    <div key={cartItem.item.id} className="cart-item">
-                      <div className="cart-item-details">
-                        <div className="cart-item-name">{cartItem.item.name}</div>
-                        <div className="cart-item-price">Rs. {cartItem.item.price}</div>
-                      </div>
-                      
-                      <div className="cart-item-quantity-control">
-                        <button
-                          type="button"
-                          className="qty-btn"
-                          onClick={() => updateCartQty(cartItem.item.id!, -1)}
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span style={{ width: '20px', textAlign: 'center', fontSize: '0.9rem', fontWeight: 600 }}>
-                          {cartItem.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          className="qty-btn"
-                          onClick={() => addToCart(cartItem.item)}
-                        >
-                          <Plus size={12} />
-                        </button>
-                        
-                        <button
-                          type="button"
-                          style={{ background: 'transparent', border: 'none', color: 'var(--status-cancelled)', cursor: 'pointer', marginLeft: '0.5rem' }}
-                          onClick={() => removeFromCart(cartItem.item.id!)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                <Divider />
 
-              <div className="cart-total-section">
-                <div className="cart-total-line">
-                  <span>Total:</span>
-                  <span style={{ color: 'var(--color-primary)' }}>Rs. {calculateTotal().toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                <Box sx={{ flexGrow: 1, overflowY: 'auto', maxHeight: 200, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {cart.length === 0 ? (
+                    <Box sx={{ textAlign: 'center', color: 'text.secondary', py: 4 }}>
+                      <Typography variant="caption">
+                        Cart is empty. Select items from the catalog.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    cart.map(cartItem => (
+                      <Box key={cartItem.item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.5 }}>
+                        <Box sx={{ minWidth: 0, pr: 1 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, fontSize: '0.85rem' }}>
+                            {cartItem.item.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Rs. {cartItem.item.price}
+                          </Typography>
+                        </Box>
 
-        {/* Expected Delivery & Meta Info */}
-        <div>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--color-primary)' }}>3. Delivery Details</h3>
-          
-          <div className="form-grid" style={{ marginBottom: '1.5rem' }}>
-            <div className="form-group">
-              <label htmlFor="order-source">Source of Order *</label>
-              <select
-                id="order-source"
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <IconButton
+                            size="small"
+                            onClick={() => updateCartQty(cartItem.item.id!, -1)}
+                            sx={{ border: '1px solid', borderColor: 'divider', p: 0.25 }}
+                          >
+                            <Minus size={10} />
+                          </IconButton>
+                          <Typography sx={{ minWidth: 20, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700 }}>
+                            {cartItem.quantity}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => addToCart(cartItem.item)}
+                            sx={{ border: '1px solid', borderColor: 'divider', p: 0.25 }}
+                          >
+                            <Plus size={10} />
+                          </IconButton>
+
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => removeFromCart(cartItem.item.id!)}
+                            sx={{ ml: 0.5 }}
+                          >
+                            <Trash2 size={14} />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+
+                <Divider sx={{ mt: 'auto' }} />
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Total:</Typography>
+                  <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 800 }}>
+                    Rs. {calculateTotal().toFixed(2)}
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+        </Box>
+
+        <Divider />
+
+        {/* Section 3: Expected Delivery & Meta Info */}
+        <Box>
+          <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, mb: 2 }}>
+            3. Delivery Details
+          </Typography>
+
+          <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                label="Source of Order"
                 value={orderSource}
                 onChange={(e) => setOrderSource(e.target.value)}
               >
-                <option value="WhatsApp">WhatsApp</option>
-                <option value="Instagram">Instagram</option>
-                <option value="Website">Website</option>
-                <option value="Walk-in">Walk-in</option>
-                <option value="Referral">Referral</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
+                {orderSources.map(src => (
+                  <MenuItem key={src} value={src}>
+                    {src}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
 
-            <div className="form-group">
-              <label htmlFor="delivery-date">Expected Delivery Date & Time *</label>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <input
-                  id="delivery-date"
-                  type="datetime-local"
-                  value={expectedDate}
-                  onChange={(e) => setExpectedDate(e.target.value)}
-                  required
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                required
+                type="datetime-local"
+                label="Expected Delivery Date & Time"
+                value={expectedDate}
+                onChange={(e) => setExpectedDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
 
-            <div className="form-group full-width">
-              <label htmlFor="delivery-location">Expected Location of Delivery *</label>
-              <textarea
-                id="delivery-location"
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                required
+                multiline
                 rows={2}
+                label="Expected Location of Delivery"
                 placeholder="Full Delivery Address..."
                 value={deliveryLocation}
                 onChange={(e) => setDeliveryLocation(e.target.value)}
-                required
               />
-            </div>
-          </div>
-        </div>
+            </Grid>
+          </Grid>
+        </Box>
 
         {/* Action / Error / Success Alerts */}
-        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-          {error && <div style={{ color: 'var(--status-cancelled)', fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem' }}>{error}</div>}
-          {successMsg && <div style={{ color: 'var(--status-ready)', fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem' }}>{successMsg}</div>}
+        <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          {error && (
+            <Typography color="error" variant="body2" sx={{ fontWeight: 600 }}>
+              {error}
+            </Typography>
+          )}
+          {successMsg && (
+            <Typography color="success.main" variant="body2" sx={{ fontWeight: 600 }}>
+              {successMsg}
+            </Typography>
+          )}
 
-          <button 
-            type="submit" 
-            className="btn btn-primary" 
-            style={{ width: '100%', justifyContent: 'center', height: '48px' }}
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
             disabled={loading}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <Send size={18} />}
+            sx={{ py: 1.5, fontSize: '1rem' }}
           >
-            {loading ? (
-              <>
-                <Loader className="animate-spin" size={20} />
-                <span>Creating Order...</span>
-              </>
-            ) : (
-              <>
-                <Send size={18} />
-                <span>Create Order & Send WhatsApp Confirmation</span>
-              </>
-            )}
-          </button>
-        </div>
-      </form>
-    </div>
+            {loading ? 'Creating Order...' : 'Create Order & Send WhatsApp Confirmation'}
+          </Button>
+        </Box>
+      </Box>
+    </Paper>
   );
 };
+
 export default OrderForm;

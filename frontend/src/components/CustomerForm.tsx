@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { api, Customer } from '../services/api';
-import { UserPlus, Loader } from 'lucide-react';
+import {
+  Box,
+  Grid,
+  TextField,
+  MenuItem,
+  Button,
+  Typography,
+  CircularProgress,
+  Paper
+} from '@mui/material';
+import { UserPlus } from 'lucide-react';
 
 interface CustomerFormProps {
   onSuccess?: (customer: Customer) => void;
@@ -48,89 +58,102 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ onSuccess }) => {
     }
   };
 
-  return (
-    <div className="glass-panel">
-      <h2>Register New Customer</h2>
-      <p className="subtitle" style={{ marginBottom: '1.5rem' }}>Add details to analyze demographics and schedule targeted campaigns.</p>
+  const genderOptions = [
+    'Male',
+    'Female',
+    'Other',
+    'Prefer Not to Say'
+  ];
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="cust-name">Customer Name *</label>
-            <input
-              id="cust-name"
-              type="text"
+  return (
+    <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+        Register New Customer
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Add details to analyze demographics and schedule targeted campaigns.
+      </Typography>
+
+      <Box component="form" onSubmit={handleSubmit}>
+        <Grid container spacing={2.5}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
+              label="Customer Name"
               placeholder="e.g. Aarav Mehta"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
             />
-          </div>
+          </Grid>
 
-          <div className="form-group">
-            <label htmlFor="cust-contact">Contact Number (WhatsApp) *</label>
-            <input
-              id="cust-contact"
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
               type="tel"
+              label="Contact Number (WhatsApp)"
               placeholder="e.g. +919876543210"
               value={contact}
               onChange={(e) => setContact(e.target.value)}
-              required
             />
-          </div>
+          </Grid>
 
-          <div className="form-group">
-            <label htmlFor="cust-gender">Gender</label>
-            <select
-              id="cust-gender"
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              select
+              label="Gender"
               value={gender}
               onChange={(e) => setGender(e.target.value as Customer['gender'])}
             >
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-              <option value="Prefer Not to Say">Prefer Not to Say</option>
-            </select>
-          </div>
+              {genderOptions.map((opt) => (
+                <MenuItem key={opt} value={opt}>
+                  {opt}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
 
-          <div className="form-group">
-            <label htmlFor="cust-location">City / Location *</label>
-            <input
-              id="cust-location"
-              type="text"
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              required
+              label="City / Location"
               placeholder="e.g. Mumbai"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              required
             />
-          </div>
+          </Grid>
 
-          <div className="form-group full-width" style={{ marginTop: '0.5rem' }}>
-            {error && <div style={{ color: 'var(--status-cancelled)', fontSize: '0.9rem', fontWeight: 500 }}>{error}</div>}
-            {successMsg && <div style={{ color: 'var(--status-ready)', fontSize: '0.9rem', fontWeight: 500 }}>{successMsg}</div>}
-            
-            <button 
-              type="submit" 
-              className="btn btn-primary" 
-              style={{ alignSelf: 'flex-start', marginTop: '0.5rem' }}
+          <Grid item xs={12}>
+            {error && (
+              <Typography color="error" variant="body2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                {error}
+              </Typography>
+            )}
+
+            {successMsg && (
+              <Typography color="success.main" variant="body2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                {successMsg}
+              </Typography>
+            )}
+
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
               disabled={loading}
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <UserPlus size={18} />}
+              sx={{ py: 1, px: 3 }}
             >
-              {loading ? (
-                <>
-                  <Loader className="animate-spin" size={18} />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus size={18} />
-                  <span>Register Customer</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
+              {loading ? 'Saving...' : 'Register Customer'}
+            </Button>
+          </Grid>
+        </Grid>
+      </Box>
+    </Paper>
   );
 };
+
 export default CustomerForm;

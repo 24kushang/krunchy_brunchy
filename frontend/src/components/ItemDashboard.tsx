@@ -1,7 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { api, Item } from '../services/api';
 import { ItemForm } from './ItemForm';
-import { Edit, Plus, X, Loader, Search } from 'lucide-react';
+import {
+  Box,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  TextField,
+  Typography,
+  Button,
+  IconButton,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  CircularProgress,
+  InputAdornment,
+  Chip
+} from '@mui/material';
+import { Edit, Plus, X, Search } from 'lucide-react';
 
 export const ItemDashboard: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
@@ -41,122 +61,153 @@ export const ItemDashboard: React.FC = () => {
     loadItems();
   };
 
-  const filteredItems = items.filter(item => 
+  const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Product Catalog Manager</h2>
-          <p className="subtitle" style={{ margin: 0 }}>Configure catalog products, ingredient parameters, shelf lives, and pricing.</p>
-        </div>
-        <button className="btn btn-primary" onClick={handleCreateClick}>
-          <Plus size={16} />
-          <span>Add New Product</span>
-        </button>
-      </div>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+            Product Catalog Manager
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Configure catalog products, ingredient parameters, shelf lives, and pricing.
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleCreateClick}
+          startIcon={<Plus size={18} />}
+        >
+          Add New Product
+        </Button>
+      </Box>
 
-      <div className="glass-panel">
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1 }}>
-            <input
-              type="text"
-              placeholder="Search by product name or ingredient..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: '100%', paddingLeft: '2.5rem' }}
-            />
-            <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--color-text-dark)' }} />
-          </div>
-        </div>
+      {/* Main Panel */}
+      <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search by product name or ingredient..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search size={16} />
+              </InputAdornment>
+            ),
+          }}
+        />
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem' }}>
-            <Loader className="animate-spin" size={32} style={{ color: 'var(--color-primary)' }} />
-          </div>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+            <CircularProgress size={36} color="primary" />
+          </Box>
         ) : (
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Product Details</th>
-                  <th>Ingredients</th>
-                  <th>Unit Price</th>
-                  <th>Shelf Life</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Product Details</TableCell>
+                  <TableCell>Ingredients</TableCell>
+                  <TableCell>Unit Price</TableCell>
+                  <TableCell>Shelf Life</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {filteredItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--color-text-dark)', padding: '2rem' }}>
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                       No items found matching filter criteria.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filteredItems.map(item => (
-                    <tr key={item.id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <span style={{ fontSize: '1.75rem' }}>🍪</span>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: '1rem' }}>{item.name}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-dark)' }}>ID: #{item.id}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxWidth: '350px' }}>
+                    <TableRow key={item.id} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          <Typography variant="h5" component="span" sx={{ fontSize: '1.75rem', lineHeight: 1 }}>
+                            🍪
+                          </Typography>
+                          <Box>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                              {item.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              ID: #{item.id}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 350 }}>
                           {item.ingredients.map((ing, i) => (
-                            <span 
-                              key={i} 
-                              style={{ fontSize: '0.75rem', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', padding: '2px 8px', borderRadius: '4px' }}
-                            >
-                              {ing}
-                            </span>
+                            <Chip
+                              key={i}
+                              label={ing}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: '0.75rem', height: '22px' }}
+                            />
                           ))}
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>Rs. {item.price}</span>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)' }}>{item.best_before_duration}</span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button 
-                          className="btn btn-secondary" 
-                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>
+                        Rs. {item.price}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {item.best_before_duration}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          variant="outlined"
+                          size="small"
                           onClick={() => handleEditClick(item)}
+                          startIcon={<Edit size={12} />}
+                          sx={{ py: 0.5 }}
                         >
-                          <Edit size={12} />
-                          <span>Edit</span>
-                        </button>
-                      </td>
-                    </tr>
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
-      </div>
+      </Paper>
 
-      {/* Edit/Create Modal Overlay */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowModal(false)}>
-              <X size={20} />
-            </button>
-            <ItemForm initialItem={editingItem} onSuccess={handleFormSuccess} />
-          </div>
-        </div>
-      )}
-    </div>
+      {/* Edit/Create Dialog */}
+      <Dialog
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, p: 1 }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+          <IconButton onClick={() => setShowModal(false)} size="small">
+            <X size={20} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ px: 3, pb: 3, pt: 0 }}>
+          <ItemForm initialItem={editingItem} onSuccess={handleFormSuccess} />
+        </DialogContent>
+      </Dialog>
+    </Box>
   );
 };
+
 export default ItemDashboard;

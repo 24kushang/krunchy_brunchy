@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { api, Order } from '../services/api';
-import { 
-  Loader, 
-  RefreshCw, 
-  Calendar, 
-  MapPin, 
-  DollarSign, 
-  CheckCircle2, 
-  XCircle, 
-  Truck, 
+import {
+  Box,
+  Grid,
+  Paper,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Chip,
+  CircularProgress,
+  IconButton
+} from '@mui/material';
+import {
+  RefreshCw,
+  Calendar,
+  MapPin,
+  DollarSign,
+  CheckCircle2,
+  XCircle,
+  Truck,
   PackageCheck
 } from 'lucide-react';
 import { ToastMessage } from './WhatsAppToast';
@@ -42,10 +53,10 @@ export const OrderDashboard: React.FC<OrderDashboardProps> = ({ onWhatsAppTrigge
   const handleUpdateStatus = async (orderId: number, status: Order['status']) => {
     try {
       const res = await api.updateOrderStatus(orderId, status);
-      
+
       // Update local state
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: res.order.status } : o));
-      
+
       if (res.whatsapp) {
         onWhatsAppTriggered({
           id: Math.random().toString(),
@@ -67,10 +78,10 @@ export const OrderDashboard: React.FC<OrderDashboardProps> = ({ onWhatsAppTrigge
     const nextStatus: Order['payment_status'] = currentPaymentStatus === 'Paid' ? 'Unpaid' : 'Paid';
     try {
       const res = await api.updateOrderPaymentStatus(orderId, nextStatus);
-      
+
       // Update local state
       setOrders(orders.map(o => o.id === orderId ? { ...o, payment_status: res.order.payment_status } : o));
-      
+
       if (res.whatsapp) {
         onWhatsAppTriggered({
           id: Math.random().toString(),
@@ -86,179 +97,283 @@ export const OrderDashboard: React.FC<OrderDashboardProps> = ({ onWhatsAppTrigge
     }
   };
 
-  const columns: { status: Order['status']; title: string; color: string }[] = [
-    { status: 'Pending', title: 'Pending', color: 'var(--status-pending)' },
-    { status: 'Preparing', title: 'Preparing', color: 'var(--status-preparing)' },
-    { status: 'Ready', title: 'Ready to Deliver', color: 'var(--status-ready)' },
-    { status: 'Delivered', title: 'Delivered', color: 'var(--status-delivered)' },
-    { status: 'Cancelled', title: 'Cancelled', color: 'var(--status-cancelled)' }
+  const columns: { status: Order['status']; title: string; colorKey: 'warning' | 'info' | 'success' | 'secondary' | 'error' }[] = [
+    { status: 'Pending', title: 'Pending', colorKey: 'warning' },
+    { status: 'Preparing', title: 'Preparing', colorKey: 'info' },
+    { status: 'Ready', title: 'Ready to Deliver', colorKey: 'success' },
+    { status: 'Delivered', title: 'Delivered', colorKey: 'secondary' },
+    { status: 'Cancelled', title: 'Cancelled', colorKey: 'error' }
   ];
 
-  const getStatusBadgeClass = (status: Order['status']) => {
-    switch (status) {
-      case 'Pending': return 'badge badge-pending';
-      case 'Preparing': return 'badge badge-preparing';
-      case 'Ready': return 'badge badge-ready';
-      case 'Delivered': return 'badge badge-delivered';
-      case 'Cancelled': return 'badge badge-cancelled';
-      default: return 'badge';
-    }
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Order Tracker</h2>
-          <p className="subtitle" style={{ margin: 0 }}>Monitor status flows, update payments, and trace notifications.</p>
-        </div>
-        <button className="btn btn-secondary" onClick={loadOrders} disabled={loading}>
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh Board</span>
-        </button>
-      </div>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h5" component="h2" sx={{ fontWeight: 600 }} color="text.primary">
+            Order Tracker
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Monitor status flows, update payments, and trace notifications.
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          color="inherit"
+          onClick={loadOrders}
+          disabled={loading}
+          startIcon={<RefreshCw size={16} className={loading ? 'animate-spin' : ''} />}
+        >
+          Refresh Board
+        </Button>
+      </Box>
 
-      {error && <div style={{ color: 'var(--status-cancelled)', fontWeight: 600 }}>{error}</div>}
+      {error && (
+        <Typography color="error" sx={{ fontWeight: 600 }}>
+          {error}
+        </Typography>
+      )}
 
       {loading && orders.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem' }}>
-          <Loader className="animate-spin" size={32} style={{ color: 'var(--color-primary)' }} />
-        </div>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}>
+          <CircularProgress size={36} color="primary" />
+        </Box>
       ) : (
-        <div className="kanban-board">
+        <Grid container spacing={2.5} sx={{ overflowX: 'auto', flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
           {columns.map(col => {
             const colOrders = orders.filter(o => o.status === col.status);
             return (
-              <div key={col.status} className="kanban-column">
-                <div className="kanban-column-title" style={{ borderBottomColor: col.color }}>
-                  <span>{col.title}</span>
-                  <span style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '50px', fontSize: '0.8rem' }}>
-                    {colOrders.length}
-                  </span>
-                </div>
+              <Grid
+                item
+                key={col.status}
+                xs={12}
+                md={2.4}
+                sx={{
+                  minWidth: { xs: '100%', sm: 260 },
+                  flexShrink: 0
+                }}
+              >
+                <Paper
+                  elevation={1}
+                  sx={{
+                    p: 2,
+                    height: '100%',
+                    minHeight: '70vh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.01)' : 'rgba(0,0,0,0.015)',
+                    borderTop: '4px solid',
+                    borderColor: `${col.colorKey}.main`
+                  }}
+                >
+                  {/* Column Header */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {col.title}
+                    </Typography>
+                    <Chip
+                      label={colOrders.length}
+                      size="small"
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        height: 20,
+                        backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                      }}
+                    />
+                  </Box>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {colOrders.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--color-text-dark)', padding: '2rem 0', fontSize: '0.8rem' }}>
-                      No orders
-                    </div>
-                  ) : (
-                    colOrders.map(order => (
-                      <div key={order.id} className="order-card">
-                        <div className="order-card-header">
-                          <span>#{order.id} via {order.source}</span>
-                          <span className={getStatusBadgeClass(order.status)}>{order.status}</span>
-                        </div>
+                  {/* Cards Container */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flexGrow: 1, overflowY: 'auto' }}>
+                    {colOrders.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', color: 'text.secondary', py: 4 }}>
+                        <Typography variant="caption" sx={{ fontStyle: 'italic' }}>
+                          No orders
+                        </Typography>
+                      </Box>
+                    ) : (
+                      colOrders.map(order => (
+                        <Card
+                          key={order.id}
+                          elevation={2}
+                          sx={{
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 2,
+                            overflow: 'visible',
+                            transition: 'transform 0.2s',
+                            '&:hover': {
+                              transform: 'translateY(-2px)'
+                            }
+                          }}
+                        >
+                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                            {/* Card Top */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                #{order.id} via {order.source}
+                              </Typography>
+                              <Chip
+                                label={order.status}
+                                size="small"
+                                color={col.colorKey}
+                                sx={{ height: 18, fontSize: '0.7rem', fontWeight: 700 }}
+                              />
+                            </Box>
 
-                        <div className="order-card-cust">{order.customer_name}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 600, marginBottom: '0.5rem' }}>
-                          {order.customer_contact}
-                        </div>
+                            {/* Customer Details */}
+                            <Box>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                                {order.customer_name}
+                              </Typography>
+                              <Typography variant="caption" color="primary.main" sx={{ fontWeight: 650 }}>
+                                {order.customer_contact}
+                              </Typography>
+                            </Box>
 
-                        <div className="order-card-items">
-                          {order.items?.map(it => (
-                            <div key={it.id}>
-                              • {it.item_name} <span style={{ color: 'white' }}>x{it.quantity}</span>
-                            </div>
-                          ))}
-                        </div>
+                            {/* Item List */}
+                            <Box sx={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 0.5,
+                              py: 0.75,
+                              borderTop: '1px solid',
+                              borderBottom: '1px solid',
+                              borderColor: 'divider'
+                            }}>
+                              {order.items?.map(it => (
+                                <Typography key={it.id} variant="caption" sx={{ color: 'text.secondary', display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>• {it.item_name}</span>
+                                  <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>x{it.quantity}</Box>
+                                </Typography>
+                              ))}
+                            </Box>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0.5rem 0', fontSize: '0.85rem' }}>
-                          <span className="order-card-price">Rs. {order.total_price}</span>
-                          <span 
-                            className={`badge ${order.payment_status === 'Paid' ? 'badge-paid' : 'badge-unpaid'}`}
-                            onClick={() => handleTogglePayment(order.id!, order.payment_status)}
-                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                            title="Click to toggle payment"
-                          >
-                            <DollarSign size={10} />
-                            {order.payment_status}
-                          </span>
-                        </div>
+                            {/* Price and Payment Toggle */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                                Rs. {order.total_price}
+                              </Typography>
+                              <Chip
+                                icon={<DollarSign size={10} style={{ marginRight: -2 }} />}
+                                label={order.payment_status}
+                                color={order.payment_status === 'Paid' ? 'success' : 'error'}
+                                size="small"
+                                onClick={() => handleTogglePayment(order.id!, order.payment_status)}
+                                sx={{ cursor: 'pointer', height: 20, fontSize: '0.75rem', fontWeight: 700 }}
+                                title="Click to toggle payment"
+                              />
+                            </Box>
 
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: '2px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '0.5rem', marginBottom: '0.5rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Calendar size={12} />
-                            <span>{new Date(order.expected_delivery_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <MapPin size={12} />
-                            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '140px' }}>
-                              {order.expected_delivery_location}
-                            </span>
-                          </div>
-                        </div>
+                            {/* Expected Delivery details */}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Calendar size={12} />
+                                <Box component="span">
+                                  {new Date(order.expected_delivery_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <MapPin size={12} />
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    textOverflow: 'ellipsis',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '150px'
+                                  }}
+                                  title={order.expected_delivery_location}
+                                >
+                                  {order.expected_delivery_location}
+                                </Box>
+                              </Box>
+                            </Box>
 
-                        {/* Order pipeline progression actions */}
-                        <div className="order-card-actions">
-                          {order.status === 'Pending' && (
-                            <>
-                              <button 
-                                className="card-action-btn"
-                                onClick={() => handleUpdateStatus(order.id!, 'Preparing')}
-                                style={{ flex: 1 }}
-                              >
-                                Prepare
-                              </button>
-                              <button 
-                                className="card-action-btn"
-                                onClick={() => handleUpdateStatus(order.id!, 'Cancelled')}
-                                style={{ borderColor: 'var(--status-cancelled)', color: 'var(--status-cancelled)' }}
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          )}
-                          {order.status === 'Preparing' && (
-                            <>
-                              <button 
-                                className="card-action-btn"
-                                onClick={() => handleUpdateStatus(order.id!, 'Ready')}
-                                style={{ flex: 1, color: 'var(--status-ready)', borderColor: 'var(--status-ready)' }}
-                              >
-                                <Truck size={12} style={{ marginRight: '4px' }} />
-                                Ready
-                              </button>
-                              <button 
-                                className="card-action-btn"
-                                onClick={() => handleUpdateStatus(order.id!, 'Cancelled')}
-                                style={{ color: 'var(--status-cancelled)' }}
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          )}
-                          {order.status === 'Ready' && (
-                            <button 
-                              className="card-action-btn"
-                              onClick={() => handleUpdateStatus(order.id!, 'Delivered')}
-                              style={{ flex: 1, color: 'var(--status-delivered)', borderColor: 'var(--status-delivered)' }}
-                            >
-                              <PackageCheck size={12} style={{ marginRight: '4px' }} />
-                              Complete Delivery
-                            </button>
-                          )}
-                          {order.status === 'Delivered' && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--status-ready)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-                              <CheckCircle2 size={12} /> Delivered
-                            </div>
-                          )}
-                          {order.status === 'Cancelled' && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--status-cancelled)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-                              <XCircle size={12} /> Cancelled
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                            {/* Progression actions */}
+                            <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+                              {order.status === 'Pending' && (
+                                <>
+                                  <Button
+                                    variant="contained"
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleUpdateStatus(order.id!, 'Preparing')}
+                                    sx={{ flexGrow: 1, py: 0.25, fontSize: '0.75rem' }}
+                                  >
+                                    Prepare
+                                  </Button>
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleUpdateStatus(order.id!, 'Cancelled')}
+                                    sx={{ py: 0.25, fontSize: '0.75rem' }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
+                              {order.status === 'Preparing' && (
+                                <>
+                                  <Button
+                                    variant="contained"
+                                    size="small"
+                                    color="success"
+                                    onClick={() => handleUpdateStatus(order.id!, 'Ready')}
+                                    startIcon={<Truck size={10} />}
+                                    sx={{ flexGrow: 1, py: 0.25, fontSize: '0.75rem' }}
+                                  >
+                                    Ready
+                                  </Button>
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleUpdateStatus(order.id!, 'Cancelled')}
+                                    sx={{ py: 0.25, fontSize: '0.75rem' }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
+                              {order.status === 'Ready' && (
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  color="secondary"
+                                  onClick={() => handleUpdateStatus(order.id!, 'Delivered')}
+                                  startIcon={<PackageCheck size={10} />}
+                                  sx={{ flexGrow: 1, py: 0.25, fontSize: '0.75rem' }}
+                                >
+                                  Complete Delivery
+                                </Button>
+                              )}
+                              {order.status === 'Delivered' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'success.main', fontWeight: 700, fontSize: '0.75rem' }}>
+                                  <CheckCircle2 size={12} /> Delivered
+                                </Box>
+                              )}
+                              {order.status === 'Cancelled' && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'error.main', fontWeight: 700, fontSize: '0.75rem' }}>
+                                  <XCircle size={12} /> Cancelled
+                                </Box>
+                              )}
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </Box>
+                </Paper>
+              </Grid>
             );
           })}
-        </div>
+        </Grid>
       )}
-    </div>
+    </Box>
   );
 };
+
 export default OrderDashboard;

@@ -1,25 +1,13 @@
-import { Pool } from 'pg';
-import dotenv from 'dotenv';
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
-dotenv.config();
+export class InitialSchema1716380000000 implements MigrationInterface {
+  name = 'InitialSchema1716380000000';
 
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'krunchy_db',
-  password: process.env.DB_PASSWORD || 'postgrespassword',
-  port: parseInt(process.env.DB_PORT || '5432'),
-});
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    console.log('[Migration] Running up() migration...');
 
-export const query = (text: string, params?: any[]) => pool.query(text, params);
-
-export const initDb = async () => {
-  const client = await pool.connect();
-  try {
-    console.log('Checking database connection & status...');
-    
-    // Create status enums if they do not exist
-    await client.query(`
+    // 1. Create Enums if they do not exist
+    await queryRunner.query(`
       DO $$ BEGIN
         CREATE TYPE order_status AS ENUM ('Pending', 'Preparing', 'Ready', 'Delivered', 'Cancelled');
       EXCEPTION
@@ -27,7 +15,7 @@ export const initDb = async () => {
       END $$;
     `);
 
-    await client.query(`
+    await queryRunner.query(`
       DO $$ BEGIN
         CREATE TYPE payment_status AS ENUM ('Unpaid', 'Paid');
       EXCEPTION
@@ -35,8 +23,8 @@ export const initDb = async () => {
       END $$;
     `);
 
-    // 1. Customers Table
-    await client.query(`
+    // 2. Create Customers Table
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS customers (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -46,25 +34,45 @@ export const initDb = async () => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    
-    await client.query(`
+
+    await queryRunner.query(`
       CREATE INDEX IF NOT EXISTS idx_customers_search ON customers(contact, name);
     `);
 
-    // 2. Items Table
-    await client.query(`
+    // 3. Migrate ingredients column if the items table already exists with TEXT[]
+    const itemsTableExists = await queryRunner.hasTable('items');
+    if (itemsTableExists) {
+      const checkColumnType = await queryRunner.query(`
+        SELECT data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'items' AND column_name = 'ingredients';
+      `);
+
+      if (checkColumnType.length > 0) {
+        const dataType = checkColumnType[0].data_type;
+        if (dataType === 'ARRAY' || dataType === 'USER-DEFINED') {
+          console.log('[Migration] Migrating items.ingredients from array to text...');
+          await queryRunner.query(`
+            ALTER TABLE items ALTER COLUMN ingredients TYPE TEXT USING array_to_string(ingredients, ', ');
+          `);
+        }
+      }
+    }
+
+    // 4. Create Items Table (if it doesn't exist)
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS items (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) UNIQUE NOT NULL,
-        ingredients TEXT[] NOT NULL,
+        ingredients TEXT NOT NULL,
         price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
         best_before_duration VARCHAR(100) NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // 3. Orders Table
-    await client.query(`
+    // 5. Create Orders Table
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
         customer_id INTEGER REFERENCES customers(id) ON DELETE RESTRICT,
@@ -78,8 +86,8 @@ export const initDb = async () => {
       );
     `);
 
-    // 4. Order Items Table
-    await client.query(`
+    // 6. Create Order Items Table
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS order_items (
         id SERIAL PRIMARY KEY,
         order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
@@ -89,8 +97,8 @@ export const initDb = async () => {
       );
     `);
 
-    // 5. Social Media Campaigns Table
-    await client.query(`
+    // 7. Create Social Campaigns Table
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS social_campaigns (
         id SERIAL PRIMARY KEY,
         campaign_name VARCHAR(255) NOT NULL,
@@ -105,8 +113,8 @@ export const initDb = async () => {
       );
     `);
 
-    // 6. WhatsApp Communication Logs Table
-    await client.query(`
+    // 8. Create WhatsApp Logs Table
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS whatsapp_logs (
         id SERIAL PRIMARY KEY,
         recipient VARCHAR(50) NOT NULL,
@@ -117,33 +125,37 @@ export const initDb = async () => {
       );
     `);
 
-    // Seed mock data if database is empty
-    const itemsRes = await client.query('SELECT COUNT(*) FROM items');
-    if (parseInt(itemsRes.rows[0].count) === 0) {
-      console.log('Database empty, seeding mock items...');
-      await client.query(`
+    // 9. Seed mock data if items table is empty
+    const itemsCountRes = await queryRunner.query('SELECT COUNT(*) FROM items');
+    const itemsCount = parseInt(itemsCountRes[0].count, 10);
+    if (itemsCount === 0) {
+      console.log('[Migration] Seeding initial database catalog...');
+      await queryRunner.query(`
         INSERT INTO items (name, ingredients, price, best_before_duration) VALUES
-        ('Chocolate Crunch Cookie', ARRAY['Chocolate Chips', 'Flour', 'Butter', 'Sugar', 'Cocoa Powder'], 120.00, '7 Days'),
-        ('Almond Oat Cookie', ARRAY['Oats', 'Almonds', 'Honey', 'Butter', 'Flour'], 150.00, '10 Days'),
-        ('Classic Butter Biscuit', ARRAY['Butter', 'Flour', 'Sugar', 'Vanilla Extract'], 90.00, '15 Days'),
-        ('Hazelnut Delight', ARRAY['Hazelnuts', 'Dark Chocolate', 'Butter', 'Flour', 'Sugar'], 180.00, '5 Days')
+        ('Chocolate Crunch Cookie', 'Chocolate Chips, Flour, Butter, Sugar, Cocoa Powder', 120.00, '7 Days'),
+        ('Almond Oat Cookie', 'Oats, Almonds, Honey, Butter, Flour', 150.00, '10 Days'),
+        ('Classic Butter Biscuit', 'Butter, Flour, Sugar, Vanilla Extract', 90.00, '15 Days'),
+        ('Hazelnut Delight', 'Hazelnuts, Dark Chocolate, Butter, Flour, Sugar', 180.00, '5 Days')
       `);
-      
-      console.log('Seeding mock customers...');
-      await client.query(`
+
+      await queryRunner.query(`
         INSERT INTO customers (name, contact, gender, location) VALUES
         ('Aarav Mehta', '+919876543210', 'Male', 'Mumbai'),
         ('Diya Sharma', '+919876543211', 'Female', 'Delhi'),
         ('Kabir Singh', '+919876543212', 'Male', 'Bangalore')
       `);
     }
-
-    console.log('Database tables successfully verified/created.');
-  } catch (err) {
-    console.error('Error during database initialization:', err);
-  } finally {
-    client.release();
   }
-};
 
-export default pool;
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    console.log('[Migration] Running down() migration (rollback)...');
+    await queryRunner.query(`DROP TABLE IF EXISTS whatsapp_logs CASCADE;`);
+    await queryRunner.query(`DROP TABLE IF EXISTS social_campaigns CASCADE;`);
+    await queryRunner.query(`DROP TABLE IF EXISTS order_items CASCADE;`);
+    await queryRunner.query(`DROP TABLE IF EXISTS orders CASCADE;`);
+    await queryRunner.query(`DROP TABLE IF EXISTS items CASCADE;`);
+    await queryRunner.query(`DROP TABLE IF EXISTS customers CASCADE;`);
+    await queryRunner.query(`DROP TYPE IF EXISTS order_status;`);
+    await queryRunner.query(`DROP TYPE IF EXISTS payment_status;`);
+  }
+}
