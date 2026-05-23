@@ -34,7 +34,6 @@ import LedgerIcon from '@mui/icons-material/ListAlt';
 import KanbanIcon from '@mui/icons-material/ViewKanban';
 import MoveRightIcon from '@mui/icons-material/ChevronRight';
 import MoveLeftIcon from '@mui/icons-material/ChevronLeft';
-import DateIcon from '@mui/icons-material/CalendarMonth';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import api from '../utils/api';
 
@@ -212,12 +211,12 @@ export default function Orders() {
         <Typography variant="body2" sx={{ fontWeight: 800 }}>{params.value}</Typography>
       )
     },
-    { field: 'customerName', headerName: 'Customer Name', width: 150, valueGetter: (value, row) => row.customer?.name || 'N/A' },
-    { field: 'customerContact', headerName: 'Contact Info', width: 130, valueGetter: (value, row) => row.customer?.contact || 'N/A' },
+    { field: 'customerName', headerName: 'Customer Name', width: 150, valueGetter: (_value, row) => row.customer?.name || 'N/A' },
+    { field: 'customerContact', headerName: 'Contact Info', width: 130, valueGetter: (_value, row) => row.customer?.contact || 'N/A' },
     { field: 'source', headerName: 'Source', width: 100 },
     { field: 'expectedDeliveryDate', headerName: 'Exp Delivery', width: 130, renderCell: (params) => params.value ? new Date(params.value).toLocaleDateString() : 'N/A' },
     { field: 'createdAt', headerName: 'Order Date', width: 150, renderCell: (params) => new Date(params.value).toLocaleString() },
-    { field: 'itemsCount', headerName: 'Items Count', width: 100, sortable: false, valueGetter: (value, row) => row.items?.length || 0 },
+    { field: 'itemsCount', headerName: 'Items Count', width: 100, sortable: false, valueGetter: (_value, row) => row.items?.length || 0 },
     {
       field: 'totalAmount', headerName: 'Total Price', width: 130, renderCell: (params) => (
         <Typography variant="body2" color="primary" sx={{ fontWeight: 800 }}>Rs. {parseFloat(params.value).toFixed(2)}</Typography>
@@ -363,7 +362,7 @@ export default function Orders() {
 
               <Tabs
                 value={activeTab}
-                onChange={(e, val) => setActiveTab(val)}
+                onChange={(_e, val) => setActiveTab(val)}
                 sx={{
                   bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
                   borderRadius: 3,

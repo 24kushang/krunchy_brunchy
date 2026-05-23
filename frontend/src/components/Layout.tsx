@@ -12,7 +12,6 @@ import {
   ListItemIcon,
   ListItemText,
   IconButton,
-  Button,
   useTheme,
   Chip,
   Divider,
@@ -144,9 +143,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   primary={item.text}
                   slotProps={{
                     primary: {
-                      fontWeight: isActive ? 700 : 500,
-                      fontSize: '0.95rem',
-                      fontFamily: isActive ? '"Fredoka", sans-serif' : 'inherit'
+                      sx: {
+                        fontWeight: isActive ? 700 : 500,
+                        fontSize: '0.95rem',
+                        fontFamily: isActive ? '"Fredoka", sans-serif' : 'inherit',
+                      }
                     }
                   }}
                 />

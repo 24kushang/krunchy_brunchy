@@ -8,7 +8,6 @@ import {
   Grid,
   Button,
   TextField,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -208,9 +207,7 @@ export default function Items() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           sx={{ width: { xs: '100%', sm: 300 } }}
-          InputProps={{
-            endAdornment: <SearchIcon color="action" />
-          }}
+          slotProps={{ input: { endAdornment: <SearchIcon color="action" /> } }}
         />
 
         <Button
@@ -275,7 +272,7 @@ export default function Items() {
                   <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
                     Ingredients:
                   </Typography>
-                  <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ gap: 0.5 }}>
+                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                     {item.ingredients?.map((ing) => (
                       <Chip key={ing} label={ing} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
                     ))}
@@ -361,12 +358,7 @@ export default function Items() {
                   freeSolo
                   options={[]}
                   value={ingredients}
-                  onChange={(event, newValue) => setIngredients(newValue)}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip variant="outlined" label={option} {...getTagProps({ index })} />
-                    ))
-                  }
+                  onChange={(_event, newValue: string[]) => setIngredients(newValue)}
                   renderInput={(params) => (
                     <TextField {...params} label="Ingredients (Type & press Enter)" placeholder="Add ingredients..." />
                   )}

@@ -1,0 +1,25 @@
+version: '3.8'
+
+# ─── Production Compose Override ────────────────────────────────────────────
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This replaces the dev frontend-ui service with a production nginx build.
+# Backend + PostgreSQL are inherited unchanged from docker-compose.yml.
+
+services:
+  frontend-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # Pass the backend URL at build time so Vite bakes it into the bundle.
+        # Change this to your real backend URL before deploying.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    container_name: oms_frontend_prod
+    ports:
+      - "80:80"         # serve on port 80 instead of 5173
+    depends_on:
+      - backend-api
+    restart: unless-stopped
+    # No volume mounts needed — assets are baked into the image

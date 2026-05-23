@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Grid,
   Button,
@@ -22,7 +20,6 @@ import {
   Drawer,
   CircularProgress,
   List,
-  ListItem,
   ListItemButton,
   ListItemText,
   FormLabel,
@@ -395,7 +392,7 @@ export default function SocialMedia() {
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        PaperProps={{ sx: { width: { xs: '100%', sm: 380 }, p: 3 } }}
+        slotProps={{ paper: { sx: { width: { xs: '100%', sm: 380 }, p: 3 } } }}
       >
         {selectedPost && (
           <Stack spacing={3}>
@@ -449,7 +446,7 @@ export default function SocialMedia() {
 
             {selectedPost.mediaUrl && (
               <Box>
-                <Typography variant="caption" color="textSecondary" display="block" sx={{ mb: 1 }}>Drive Attachment</Typography>
+                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>Drive Attachment</Typography>
                 <Button
                   variant="outlined"
                   href={selectedPost.mediaUrl}
@@ -490,9 +487,11 @@ export default function SocialMedia() {
                         primary={key}
                         slotProps={{
                           primary: {
-                            fontWeight: checked ? 700 : 500,
-                            color: checked ? '#4CAF50' : 'inherit',
-                            fontSize: '0.9rem'
+                            sx: {
+                              fontWeight: checked ? 700 : 500,
+                              color: checked ? '#4CAF50' : 'inherit',
+                              fontSize: '0.9rem'
+                            }
                           }
                         }}
                       />

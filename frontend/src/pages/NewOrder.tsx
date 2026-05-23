@@ -3,14 +3,12 @@ import {
   Box,
   Grid,
   Card,
-  CardMedia,
   CardContent,
   Typography,
   TextField,
   Button,
   IconButton,
   Autocomplete,
-  Paper,
   CircularProgress,
   Radio,
   RadioGroup,
@@ -20,10 +18,8 @@ import {
   Select,
   MenuItem,
   Stack,
-  CardActions,
   Divider,
   Alert,
-  Slide,
   Backdrop,
   Chip,
   useTheme,
@@ -289,10 +285,10 @@ export default function NewOrder() {
               <Autocomplete
                 options={customersList}
                 getOptionLabel={(option) => `${option.name} (${option.contact})`}
-                onInputChange={(event, newValue) => {
+                onInputChange={(_event, newValue) => {
                   setSearchQuery(newValue);
                 }}
-                onChange={(event, newValue) => {
+                onChange={(_event, newValue) => {
                   handleSelectCustomer(newValue);
                 }}
                 renderInput={(params) => (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -125,7 +125,7 @@ export default function WhatsappHub() {
 
   const columns: GridColDef[] = [
     { field: 'timestamp', headerName: 'Dispatched At', width: 180, renderCell: (params) => new Date(params.value).toLocaleString() },
-    { field: 'orderNumber', headerName: 'Associated Order', width: 140, valueGetter: (value, row) => row.order?.orderNumber || 'N/A' },
+    { field: 'orderNumber', headerName: 'Associated Order', width: 140, valueGetter: (_value, row) => row.order?.orderNumber || 'N/A' },
     { field: 'recipientName', headerName: 'Recipient Name', width: 170 },
     { field: 'recipientContact', headerName: 'Contact Number', width: 150 },
     { field: 'triggeringEvent', headerName: 'Trigger Event', width: 190 },
@@ -178,7 +178,7 @@ export default function WhatsappHub() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Tabs
           value={activeTab}
-          onChange={(e, val) => setActiveTab(val)}
+          onChange={(_e, val) => setActiveTab(val)}
           sx={{
             bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
             borderRadius: 3,

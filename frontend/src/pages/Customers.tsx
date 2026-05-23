@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -274,7 +274,7 @@ export default function Customers() {
                         outerRadius={70}
                         label
                       >
-                        {metrics.genderDistribution.map((entry, index) => (
+                        {metrics.genderDistribution.map((_entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
