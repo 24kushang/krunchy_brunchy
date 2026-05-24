@@ -103,6 +103,7 @@ export default function NewOrder() {
       setCustomersList([]);
       return;
     }
+    console.log("search query is ", searchQuery)
 
     setLoadingCustomers(true);
     const delayDebounceFn = setTimeout(() => {
@@ -299,6 +300,7 @@ export default function NewOrder() {
                     fullWidth
                     placeholder="Type name or phone number..."
                     slotProps={{
+                      ...params.slotProps,
                       input: {
                         ...params.slotProps.input,
                         endAdornment: (
@@ -495,7 +497,7 @@ export default function NewOrder() {
                           Rs. {item.activePrice.toFixed(2)}
                         </Typography>
                       </Box>
-                      
+
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <IconButton
                           onClick={() => updateCartQty(item.id, -1)}
@@ -508,11 +510,11 @@ export default function NewOrder() {
                         >
                           <RemoveIcon fontSize="small" />
                         </IconButton>
-                        
+
                         <Typography variant="body2" sx={{ fontWeight: 800, minWidth: 20, textAlign: 'center' }}>
                           {qty}
                         </Typography>
-                        
+
                         <IconButton
                           onClick={() => updateCartQty(item.id, 1)}
                           size="small"
