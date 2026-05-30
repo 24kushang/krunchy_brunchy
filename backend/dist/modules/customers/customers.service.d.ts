@@ -18,6 +18,7 @@ export declare class CustomersService {
         contact: string;
         gender: Gender;
         location: string;
+        address?: string;
     }): Promise<Customer>;
     update(id: string, data: Partial<Customer>): Promise<Customer>;
     remove(id: string): Promise<void>;

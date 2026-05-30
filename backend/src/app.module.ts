@@ -9,6 +9,8 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { SocialMediaModule } from './modules/social-media/social-media.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { OrderSourcesModule } from './modules/order-sources/order-sources.module';
+import { InventoriesModule } from './modules/inventories/inventories.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { UploadModule } from './modules/upload/upload.module';
     WhatsappModule,
     SocialMediaModule,
     UploadModule,
+    OrderSourcesModule,
+    InventoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

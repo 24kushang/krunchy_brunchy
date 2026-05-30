@@ -50,6 +50,7 @@ export class CustomersService {
         contact: c.contact,
         gender: c.gender,
         location: c.location,
+        address: c.address,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         orderCount,
@@ -94,7 +95,7 @@ export class CustomersService {
     });
   }
 
-  async create(data: { name: string; contact: string; gender: Gender; location: string }): Promise<Customer> {
+  async create(data: { name: string; contact: string; gender: Gender; location: string; address?: string }): Promise<Customer> {
     const existing = await this.customerRepository.findOne({ where: { contact: data.contact } });
     if (existing) {
       throw new ConflictException(`Customer contact ${data.contact} already exists`);

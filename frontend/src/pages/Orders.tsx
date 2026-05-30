@@ -35,6 +35,7 @@ import KanbanIcon from '@mui/icons-material/ViewKanban';
 import MoveRightIcon from '@mui/icons-material/ChevronRight';
 import MoveLeftIcon from '@mui/icons-material/ChevronLeft';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import api from '../utils/api';
 
 const OrderStatus = {
@@ -54,9 +55,13 @@ interface Order {
   totalAmount: number;
   createdAt: string;
   updatedAt?: string;
-  source?: string;
+  source?: { id: string; name: string } | string;
   expectedDeliveryDate?: string;
   deliveryLocation?: string;
+  paymentStatus?: string;
+  paymentMode?: string;
+  cashCollectionDetails?: string;
+  paymentUpdatedAt?: string;
   customer: {
     name: string;
     contact: string;
@@ -93,9 +98,17 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
 
+  // Payment status updating states
+  const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid'>('Unpaid');
+  const [paymentMode, setPaymentMode] = useState<'UPI' | 'Cash' | 'Card' | 'Net Banking'>('UPI');
+  const [cashDetails, setCashDetails] = useState('');
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+
   // Fetch orders (Ledger vs Kanban)
-  const fetchOrders = () => {
-    setLoading(true);
+  const fetchOrders = (silent = false) => {
+    if (!silent) setLoading(true);
 
     // Ledger: Server-side pagination/sorting/filtering
     if (activeTab === 1) {
@@ -164,9 +177,13 @@ export default function Orders() {
 
   // Update order status PATCH
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
+    // Optimistic state update in local state for immediate response
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o)),
+    );
     try {
       await api.patch(`/api/orders/${orderId}/status`, { status: newStatus });
-      fetchOrders();
+      fetchOrders(true); // silent background reload to verify
       if (selectedOrder && selectedOrder.id === orderId) {
         // Refresh details modal
         const res = await api.get(`/api/orders/${orderId}`);
@@ -174,6 +191,33 @@ export default function Orders() {
       }
     } catch (err) {
       console.error('Failed to update status', err);
+      fetchOrders(); // full refetch to restore original states on fail
+    }
+  };
+
+  // Update order payment status
+  const handleUpdatePayment = async () => {
+    if (!paymentOrder) return;
+    setPaymentSubmitting(true);
+    try {
+      await api.patch(`/api/orders/${paymentOrder.id}/payment`, {
+        paymentStatus,
+        paymentMode: paymentStatus === 'Paid' ? paymentMode : undefined,
+        cashDetails: paymentMode === 'Cash' ? cashDetails : undefined,
+      });
+      setOpenPaymentDialog(false);
+      fetchOrders(true); // silent refresh
+      
+      // Update selected order details if open
+      if (selectedOrder && selectedOrder.id === paymentOrder.id) {
+        const res = await api.get(`/api/orders/${paymentOrder.id}`);
+        setSelectedOrder(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to update payment', err);
+      alert('Failed to update payment status');
+    } finally {
+      setPaymentSubmitting(false);
     }
   };
 
@@ -213,10 +257,45 @@ export default function Orders() {
     },
     { field: 'customerName', headerName: 'Customer Name', width: 150, valueGetter: (_value, row) => row.customer?.name || 'N/A' },
     { field: 'customerContact', headerName: 'Contact Info', width: 130, valueGetter: (_value, row) => row.customer?.contact || 'N/A' },
-    { field: 'source', headerName: 'Source', width: 100 },
+    { field: 'source', headerName: 'Source', width: 100, valueGetter: (_value, row) => (typeof row.source === 'object' ? row.source?.name : row.source) || 'N/A' },
     { field: 'expectedDeliveryDate', headerName: 'Exp Delivery', width: 130, renderCell: (params) => params.value ? new Date(params.value).toLocaleDateString() : 'N/A' },
     { field: 'createdAt', headerName: 'Order Date', width: 150, renderCell: (params) => new Date(params.value).toLocaleString() },
     { field: 'itemsCount', headerName: 'Items Count', width: 100, sortable: false, valueGetter: (_value, row) => row.items?.length || 0 },
+    {
+      field: 'paymentStatus',
+      headerName: 'Payment',
+      width: 145,
+      renderCell: (params) => {
+        const isPaid = params.row.paymentStatus === 'Paid';
+        return (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
+            <Chip
+              label={isPaid ? `Paid (${params.row.paymentMode})` : 'Unpaid'}
+              size="small"
+              color={isPaid ? 'success' : 'error'}
+              variant={isPaid ? 'filled' : 'outlined'}
+              sx={{ fontWeight: 'bold' }}
+            />
+            {!isPaid && (
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPaymentOrder(params.row);
+                  setPaymentStatus('Paid');
+                  setPaymentMode('UPI');
+                  setCashDetails('');
+                  setOpenPaymentDialog(true);
+                }}
+              >
+                <AttachMoneyIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Stack>
+        );
+      }
+    },
     {
       field: 'totalAmount', headerName: 'Total Price', width: 130, renderCell: (params) => (
         <Typography variant="body2" color="primary" sx={{ fontWeight: 800 }}>Rs. {parseFloat(params.value).toFixed(2)}</Typography>
@@ -296,11 +375,33 @@ export default function Orders() {
 
   return (
     <Box>
-      {/* Top Controls: Filter Toolbar */}
+      {/* Top Header Section with Toggle */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
+        <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', fontWeight: 700 }}>
+          Orders Dashboard
+        </Typography>
+        
+        <Tabs
+          value={activeTab}
+          onChange={(_e, val) => setActiveTab(val)}
+          sx={{
+            bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
+            borderRadius: 3,
+            p: 0.5,
+            minHeight: 0,
+            '& .MuiTabs-indicator': { display: 'none' },
+          }}
+        >
+          <Tab icon={<KanbanIcon sx={{ fontSize: 18 }} />} label="Kanban" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
+          <Tab icon={<LedgerIcon sx={{ fontSize: 18 }} />} label="Ledger" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
+        </Tabs>
+      </Box>
+
+      {/* Filter Card */}
       <Card sx={{ mb: 3 }}>
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
           <Grid container spacing={2} sx={{ alignItems: 'center' }}>
-            <Grid size={{ xs: 12, sm: 4, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 4, md: 4 }}>
               <TextField
                 label="Search order number or customer name..."
                 variant="outlined"
@@ -355,25 +456,10 @@ export default function Orders() {
               </Stack>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 12, md: 2 }} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-              <IconButton onClick={fetchOrders} color="primary" sx={{ border: `1px solid ${theme.palette.divider}` }}>
+            <Grid size={{ xs: 12, sm: 12, md: 1 }} sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <IconButton onClick={() => fetchOrders()} color="primary" sx={{ border: `1px solid ${theme.palette.divider}` }}>
                 <RefreshIcon />
               </IconButton>
-
-              <Tabs
-                value={activeTab}
-                onChange={(_e, val) => setActiveTab(val)}
-                sx={{
-                  bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
-                  borderRadius: 3,
-                  p: 0.5,
-                  minHeight: 0,
-                  '& .MuiTabs-indicator': { display: 'none' },
-                }}
-              >
-                <Tab icon={<KanbanIcon sx={{ fontSize: 18 }} />} label="Kanban" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
-                <Tab icon={<LedgerIcon sx={{ fontSize: 18 }} />} label="Ledger" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
-              </Tabs>
             </Grid>
           </Grid>
         </CardContent>
@@ -446,17 +532,43 @@ export default function Orders() {
                           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                             {order.orderNumber}
                           </Typography>
-                          <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 800 }}>
-                            Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
-                          </Typography>
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Chip
+                              label={order.paymentStatus === 'Paid' ? 'Paid' : 'Unpaid'}
+                              size="small"
+                              variant={order.paymentStatus === 'Paid' ? 'filled' : 'outlined'}
+                              color={order.paymentStatus === 'Paid' ? 'success' : 'error'}
+                              sx={{ fontSize: '0.65rem', height: 16, fontWeight: 700 }}
+                            />
+                            <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 800 }}>
+                              Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
+                            </Typography>
+                          </Stack>
                         </Stack>
 
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {order.customer?.name}
                         </Typography>
-                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1.5 }}>
-                          📞 {order.customer?.contact}
-                        </Typography>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
+                          <Typography variant="caption" color="textSecondary">
+                            📞 {order.customer?.contact}
+                          </Typography>
+                          {order.source && (
+                            <Chip
+                              label={typeof order.source === 'object' ? order.source.name : order.source}
+                              size="small"
+                              variant="outlined"
+                              sx={{
+                                fontSize: '0.65rem',
+                                height: 18,
+                                borderColor: '#0A3BB0',
+                                color: '#0A3BB0',
+                                bgcolor: 'rgba(10, 59, 176, 0.04)',
+                                fontWeight: 600,
+                              }}
+                            />
+                          )}
+                        </Stack>
 
                         <Divider sx={{ mb: 1 }} />
 
@@ -579,7 +691,9 @@ export default function Orders() {
                 </Grid>
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Order Source</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.source || 'N/A'}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {typeof selectedOrder.source === 'object' ? (selectedOrder.source as any)?.name : selectedOrder.source || 'N/A'}
+                  </Typography>
                 </Grid>
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Expected Delivery Date</Typography>
@@ -591,6 +705,46 @@ export default function Orders() {
                   <Typography variant="caption" color="textSecondary">Expected Location of Delivery</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.deliveryLocation || 'N/A'}</Typography>
                 </Grid>
+              </Grid>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Payment Segment */}
+              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Payment Information
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Status</Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      label={selectedOrder.paymentStatus || 'Unpaid'}
+                      size="small"
+                      color={selectedOrder.paymentStatus === 'Paid' ? 'success' : 'error'}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                  </Box>
+                </Grid>
+                {selectedOrder.paymentStatus === 'Paid' && (
+                  <>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="textSecondary">Payment Mode</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.paymentMode || 'N/A'}</Typography>
+                    </Grid>
+                    {selectedOrder.paymentMode === 'Cash' && (
+                      <Grid size={12}>
+                        <Typography variant="caption" color="textSecondary">Cash Collected At</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.cashCollectionDetails || 'N/A'}</Typography>
+                      </Grid>
+                    )}
+                    <Grid size={12}>
+                      <Typography variant="caption" color="textSecondary">Payment Recorded At</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {selectedOrder.paymentUpdatedAt ? new Date(selectedOrder.paymentUpdatedAt).toLocaleString() : 'N/A'}
+                      </Typography>
+                    </Grid>
+                  </>
+                )}
               </Grid>
 
               <Divider sx={{ mb: 3 }} />
@@ -622,9 +776,9 @@ export default function Orders() {
             </DialogContent>
             <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2, display: 'flex', justifyContent: 'space-between' }}>
               {/* Quick Status Modifiers */}
-              <Box>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 {selectedOrder.status !== OrderStatus.DELIVERED && selectedOrder.status !== OrderStatus.CANCELLED && (
-                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
                     <InputLabel>Advance Status</InputLabel>
                     <Select
                       label="Advance Status"
@@ -638,7 +792,26 @@ export default function Orders() {
                     </Select>
                   </FormControl>
                 )}
-              </Box>
+
+                {selectedOrder.paymentStatus !== 'Paid' && (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="small"
+                    startIcon={<AttachMoneyIcon />}
+                    onClick={() => {
+                      setPaymentOrder(selectedOrder);
+                      setPaymentStatus('Paid');
+                      setPaymentMode('UPI');
+                      setCashDetails('');
+                      setOpenPaymentDialog(true);
+                    }}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Mark Paid
+                  </Button>
+                )}
+              </Stack>
 
               <Button variant="outlined" onClick={() => setOpenDetail(false)} sx={{ borderRadius: 3 }}>
                 Close
@@ -647,6 +820,71 @@ export default function Orders() {
           </>
         )}
       </Dialog>
+
+      {/* Record Order Payment Dialog */}
+      <Dialog open={openPaymentDialog} onClose={() => setOpenPaymentDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', borderBottom: `1px solid ${theme.palette.divider}` }}>
+          Record Order Payment
+        </DialogTitle>
+        <DialogContent sx={{ py: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Payment Status</InputLabel>
+              <Select
+                value={paymentStatus}
+                label="Payment Status"
+                onChange={(e) => setPaymentStatus(e.target.value as any)}
+              >
+                <MenuItem value="Paid">Paid</MenuItem>
+                <MenuItem value="Unpaid">Unpaid</MenuItem>
+              </Select>
+            </FormControl>
+
+            {paymentStatus === 'Paid' && (
+              <>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Payment Mode</InputLabel>
+                  <Select
+                    value={paymentMode}
+                    label="Payment Mode"
+                    onChange={(e) => setPaymentMode(e.target.value as any)}
+                  >
+                    <MenuItem value="UPI">UPI</MenuItem>
+                    <MenuItem value="Cash">Cash</MenuItem>
+                    <MenuItem value="Card">Card</MenuItem>
+                    <MenuItem value="Net Banking">Net Banking</MenuItem>
+                  </Select>
+                </FormControl>
+
+                {paymentMode === 'Cash' && (
+                  <TextField
+                    label="Where was Cash collected?"
+                    placeholder="e.g. Counter Register A, Rider Ramesh"
+                    value={cashDetails}
+                    onChange={(e) => setCashDetails(e.target.value)}
+                    size="small"
+                    fullWidth
+                    required
+                  />
+                )}
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
+          <Button onClick={() => setOpenPaymentDialog(false)} variant="outlined" sx={{ borderRadius: 3 }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleUpdatePayment}
+            variant="contained"
+            disabled={paymentSubmitting || (paymentStatus === 'Paid' && paymentMode === 'Cash' && !cashDetails.trim())}
+            sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}
+          >
+            {paymentSubmitting ? 'Saving...' : 'Save Payment'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
-}
+};

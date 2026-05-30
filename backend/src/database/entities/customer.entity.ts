@@ -20,6 +20,9 @@ export class Customer {
   @Column({ type: 'varchar', length: 100 })
   location: string;
 
+  @Column({ type: 'text', nullable: true })
+  address: string | null;
+
   @OneToMany(() => Order, (order) => order.customer)
   orders: Order[];
 

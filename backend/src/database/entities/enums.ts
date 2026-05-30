@@ -18,10 +18,14 @@ export enum WhatsappLogStatus {
   FAILED = 'Failed',
 }
 
-export enum OrderSource {
-  WHATSAPP = 'WhatsApp',
-  PHONE = 'Phone',
-  INSTAGRAM = 'Instagram',
-  WEBSITE = 'Website',
-  WALK_IN = 'Walk-in',
+export enum PaymentStatus {
+  PAID = 'Paid',
+  UNPAID = 'Unpaid',
+}
+
+export enum PaymentMode {
+  CASH = 'Cash',
+  UPI = 'UPI',
+  CARD = 'Card',
+  NET_BANKING = 'Net Banking',
 }

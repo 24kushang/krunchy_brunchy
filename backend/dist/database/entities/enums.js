@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OrderSource = exports.WhatsappLogStatus = exports.OrderStatus = exports.Gender = void 0;
+exports.PaymentMode = exports.PaymentStatus = exports.WhatsappLogStatus = exports.OrderStatus = exports.Gender = void 0;
 var Gender;
 (function (Gender) {
     Gender["MALE"] = "Male";
@@ -21,12 +21,16 @@ var WhatsappLogStatus;
     WhatsappLogStatus["DELIVERED"] = "Delivered";
     WhatsappLogStatus["FAILED"] = "Failed";
 })(WhatsappLogStatus || (exports.WhatsappLogStatus = WhatsappLogStatus = {}));
-var OrderSource;
-(function (OrderSource) {
-    OrderSource["WHATSAPP"] = "WhatsApp";
-    OrderSource["PHONE"] = "Phone";
-    OrderSource["INSTAGRAM"] = "Instagram";
-    OrderSource["WEBSITE"] = "Website";
-    OrderSource["WALK_IN"] = "Walk-in";
-})(OrderSource || (exports.OrderSource = OrderSource = {}));
+var PaymentStatus;
+(function (PaymentStatus) {
+    PaymentStatus["PAID"] = "Paid";
+    PaymentStatus["UNPAID"] = "Unpaid";
+})(PaymentStatus || (exports.PaymentStatus = PaymentStatus = {}));
+var PaymentMode;
+(function (PaymentMode) {
+    PaymentMode["CASH"] = "Cash";
+    PaymentMode["UPI"] = "UPI";
+    PaymentMode["CARD"] = "Card";
+    PaymentMode["NET_BANKING"] = "Net Banking";
+})(PaymentMode || (exports.PaymentMode = PaymentMode = {}));
 //# sourceMappingURL=enums.js.map

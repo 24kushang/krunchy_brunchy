@@ -44,7 +44,7 @@ export class CustomersController {
 
   @Post()
   async create(
-    @Body() body: { name: string; contact: string; gender: Gender; location: string },
+    @Body() body: { name: string; contact: string; gender: Gender; location: string; address?: string },
   ) {
     return this.customersService.create(body);
   }
@@ -52,7 +52,7 @@ export class CustomersController {
   @Put(':id')
   async update(
     @Param('id') id: string,
-    @Body() body: { name?: string; contact?: string; gender?: Gender; location?: string },
+    @Body() body: { name?: string; contact?: string; gender?: Gender; location?: string; address?: string },
   ) {
     return this.customersService.update(id, body);
   }

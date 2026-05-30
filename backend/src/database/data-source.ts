@@ -8,6 +8,9 @@ import { OrderItem } from './entities/order-item.entity';
 import { OrderStatusHistory } from './entities/order-status-history.entity';
 import { WhatsappLog } from './entities/whatsapp-log.entity';
 import { SocialMediaContent } from './entities/social-media-content.entity';
+import { OrderSource } from './entities/order-source.entity';
+import { InventoryLocation } from './entities/inventory-location.entity';
+import { ItemInventory } from './entities/item-inventory.entity';
 
 dotenv.config();
 
@@ -27,6 +30,9 @@ export const AppDataSource = new DataSource({
     OrderStatusHistory,
     WhatsappLog,
     SocialMediaContent,
+    OrderSource,
+    InventoryLocation,
+    ItemInventory,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

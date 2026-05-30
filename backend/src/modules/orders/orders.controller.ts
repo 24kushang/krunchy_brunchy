@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { OrderStatus, Gender, OrderSource } from '../../database/entities/enums';
+import { OrderStatus, Gender, PaymentStatus, PaymentMode } from '../../database/entities/enums';
 
 @Controller('api/orders')
 export class OrdersController {
@@ -29,6 +29,16 @@ export class OrdersController {
     });
   }
 
+  @Get('metrics/revenue')
+  async getRevenueMetrics() {
+    return this.ordersService.getRevenueMetrics();
+  }
+
+  @Post('import')
+  async importOrders(@Body() body: { csvText: string }) {
+    return this.ordersService.importOrders(body.csvText);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
@@ -41,9 +51,12 @@ export class OrdersController {
       customerName?: string;
       customerGender?: Gender;
       customerLocation?: string;
-      source?: OrderSource;
+      customerAddress?: string;
+      sourceId?: string;
+      fulfillmentHubId?: string;
       expectedDeliveryDate?: string | Date;
       deliveryLocation?: string;
+      status?: OrderStatus;
       items: { itemId: string; quantity: number }[];
     },
   ) {
@@ -57,5 +70,18 @@ export class OrdersController {
   ) {
     const changedBy = body.changedBy || 'Admin';
     return this.ordersService.updateStatus(id, body.status, changedBy);
+  }
+
+  @Patch(':id/payment')
+  async updatePayment(
+    @Param('id') id: string,
+    @Body() body: { paymentStatus: PaymentStatus; paymentMode?: PaymentMode; cashDetails?: string },
+  ) {
+    return this.ordersService.updatePayment(
+      id,
+      body.paymentStatus,
+      body.paymentMode,
+      body.cashDetails,
+    );
   }
 }

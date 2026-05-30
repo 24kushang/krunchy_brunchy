@@ -33,6 +33,12 @@ let OrdersController = class OrdersController {
             sortOrder,
         });
     }
+    async getRevenueMetrics() {
+        return this.ordersService.getRevenueMetrics();
+    }
+    async importOrders(body) {
+        return this.ordersService.importOrders(body.csvText);
+    }
     async findOne(id) {
         return this.ordersService.findOne(id);
     }
@@ -42,6 +48,9 @@ let OrdersController = class OrdersController {
     async updateStatus(id, body) {
         const changedBy = body.changedBy || 'Admin';
         return this.ordersService.updateStatus(id, body.status, changedBy);
+    }
+    async updatePayment(id, body) {
+        return this.ordersService.updatePayment(id, body.paymentStatus, body.paymentMode, body.cashDetails);
     }
 };
 exports.OrdersController = OrdersController;
@@ -59,6 +68,19 @@ __decorate([
     __metadata("design:paramtypes", [Number, Number, String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)('metrics/revenue'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "getRevenueMetrics", null);
+__decorate([
+    (0, common_1.Post)('import'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "importOrders", null);
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),
@@ -81,6 +103,14 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], OrdersController.prototype, "updateStatus", null);
+__decorate([
+    (0, common_1.Patch)(':id/payment'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], OrdersController.prototype, "updatePayment", null);
 exports.OrdersController = OrdersController = __decorate([
     (0, common_1.Controller)('api/orders'),
     __metadata("design:paramtypes", [orders_service_1.OrdersService])

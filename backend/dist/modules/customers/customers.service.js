@@ -48,6 +48,7 @@ let CustomersService = class CustomersService {
                 contact: c.contact,
                 gender: c.gender,
                 location: c.location,
+                address: c.address,
                 createdAt: c.createdAt,
                 updatedAt: c.updatedAt,
                 orderCount,

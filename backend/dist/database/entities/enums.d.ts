@@ -15,10 +15,13 @@ export declare enum WhatsappLogStatus {
     DELIVERED = "Delivered",
     FAILED = "Failed"
 }
-export declare enum OrderSource {
-    WHATSAPP = "WhatsApp",
-    PHONE = "Phone",
-    INSTAGRAM = "Instagram",
-    WEBSITE = "Website",
-    WALK_IN = "Walk-in"
+export declare enum PaymentStatus {
+    PAID = "Paid",
+    UNPAID = "Unpaid"
+}
+export declare enum PaymentMode {
+    CASH = "Cash",
+    UPI = "UPI",
+    CARD = "Card",
+    NET_BANKING = "Net Banking"
 }

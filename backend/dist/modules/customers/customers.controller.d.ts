@@ -12,12 +12,14 @@ export declare class CustomersController {
         contact: string;
         gender: Gender;
         location: string;
+        address?: string;
     }): Promise<import("../../database/entities/customer.entity").Customer>;
     update(id: string, body: {
         name?: string;
         contact?: string;
         gender?: Gender;
         location?: string;
+        address?: string;
     }): Promise<import("../../database/entities/customer.entity").Customer>;
     remove(id: string): Promise<{
         success: boolean;

@@ -54,6 +54,7 @@ interface Customer {
   contact: string;
   gender: string;
   location: string;
+  address?: string;
   orderCount: number;
   ltv: number;
 }
@@ -75,7 +76,7 @@ export default function Customers() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [locationFilter, setLocationFilter] = useState('ALL');
+  const [locationFilter, setLocationFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('ALL');
 
   // Customer Form Dialog states
@@ -85,13 +86,14 @@ export default function Customers() {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [gender, setGender] = useState('Male');
-  const [location, setLocation] = useState('Mumbai');
+  const [location, setLocation] = useState('');
+  const [address, setAddress] = useState('');
 
   const fetchCustomers = () => {
     setLoading(true);
     const params: Record<string, any> = {};
     if (search) params.search = search;
-    if (locationFilter !== 'ALL') params.location = locationFilter;
+    if (locationFilter && locationFilter !== 'ALL') params.location = locationFilter;
     if (genderFilter !== 'ALL') params.gender = genderFilter;
 
     api.get('/api/customers', { params })
@@ -127,7 +129,7 @@ export default function Customers() {
   const handleExportCSV = () => {
     let url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/customers/export?`;
     if (search) url += `search=${encodeURIComponent(search)}&`;
-    if (locationFilter !== 'ALL') url += `location=${encodeURIComponent(locationFilter)}&`;
+    if (locationFilter && locationFilter !== 'ALL') url += `location=${encodeURIComponent(locationFilter)}&`;
     if (genderFilter !== 'ALL') url += `gender=${encodeURIComponent(genderFilter)}&`;
 
     window.open(url, '_blank');
@@ -139,7 +141,8 @@ export default function Customers() {
     setName('');
     setContact('');
     setGender('Male');
-    setLocation('Mumbai');
+    setLocation('');
+    setAddress('');
     setOpenDialog(true);
   };
 
@@ -150,6 +153,7 @@ export default function Customers() {
     setContact(customer.contact);
     setGender(customer.gender);
     setLocation(customer.location);
+    setAddress(customer.address || '');
     setOpenDialog(true);
   };
 
@@ -159,7 +163,7 @@ export default function Customers() {
       return;
     }
 
-    const payload = { name, contact, gender, location };
+    const payload = { name, contact, gender, location, address };
 
     try {
       if (isEditMode && editingId) {
@@ -179,17 +183,18 @@ export default function Customers() {
     { field: 'name', headerName: 'Customer Name', width: 180, renderCell: (params) => (
       <Typography variant="body2" sx={{ fontWeight: 700 }}>{params.value}</Typography>
     )},
-    { field: 'contact', headerName: 'Contact Number', width: 160 },
-    { field: 'gender', headerName: 'Gender', width: 120 },
-    { field: 'location', headerName: 'City / Location', width: 150 },
-    { field: 'orderCount', headerName: 'Orders Placed', type: 'number', width: 130 },
-    { field: 'ltv', headerName: 'Lifetime Value', type: 'number', width: 150, renderCell: (params) => (
+    { field: 'contact', headerName: 'Contact Number', width: 140 },
+    { field: 'gender', headerName: 'Gender', width: 100 },
+    { field: 'location', headerName: 'City / Location', width: 130 },
+    { field: 'address', headerName: 'Address', width: 220 },
+    { field: 'orderCount', headerName: 'Orders Placed', type: 'number', width: 110 },
+    { field: 'ltv', headerName: 'Lifetime Value', type: 'number', width: 130, renderCell: (params) => (
       <Typography variant="body2" color="primary" sx={{ fontWeight: 800 }}>Rs. {parseFloat(params.value).toFixed(2)}</Typography>
     )},
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 100,
+      width: 90,
       sortable: false,
       renderCell: (params) => (
         <Button size="small" onClick={() => handleOpenEdit(params.row)}>
@@ -377,21 +382,14 @@ export default function Customers() {
             </Grid>
             
             <Grid size={{ xs: 12, sm: 4 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Location / City</InputLabel>
-                <Select
-                  value={locationFilter}
-                  label="Location / City"
-                  onChange={(e) => setLocationFilter(e.target.value)}
-                >
-                  <MenuItem value="ALL">All Regions</MenuItem>
-                  <MenuItem value="Mumbai">Mumbai</MenuItem>
-                  <MenuItem value="Delhi">Delhi</MenuItem>
-                  <MenuItem value="Bangalore">Bangalore</MenuItem>
-                  <MenuItem value="Pune">Pune</MenuItem>
-                  <MenuItem value="Ahmedabad">Ahmedabad</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                label="Filter by Location / City..."
+                variant="outlined"
+                size="small"
+                fullWidth
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+              />
             </Grid>
 
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -462,20 +460,23 @@ export default function Customers() {
               required
             />
 
-            <FormControl fullWidth>
-              <InputLabel>Location / City</InputLabel>
-              <Select
-                value={location}
-                label="Location / City"
-                onChange={(e) => setLocation(e.target.value)}
-              >
-                <MenuItem value="Mumbai">Mumbai</MenuItem>
-                <MenuItem value="Delhi">Delhi</MenuItem>
-                <MenuItem value="Bangalore">Bangalore</MenuItem>
-                <MenuItem value="Pune">Pune</MenuItem>
-                <MenuItem value="Ahmedabad">Ahmedabad</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              label="Location / City"
+              fullWidth
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              required
+            />
+
+            <TextField
+              label="Customer Address (for future reference)"
+              fullWidth
+              multiline
+              rows={2}
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Enter customer address..."
+            />
 
             <FormControl>
               <FormLabel sx={{ fontSize: '0.85rem', fontWeight: 700, mb: 0.5 }}>Gender Demographics</FormLabel>

@@ -7,6 +7,9 @@ import Customers from './pages/Customers';
 import SocialMedia from './pages/SocialMedia';
 import WhatsappHub from './pages/WhatsappHub';
 import NewOrder from './pages/NewOrder';
+import OrderSources from './pages/OrderSources';
+import InventoryPlanner from './pages/InventoryPlanner';
+import RevenueDashboard from './pages/RevenueDashboard';
 
 function App() {
   return (
@@ -21,6 +24,9 @@ function App() {
             <Route path="/social-media" element={<SocialMedia />} />
             <Route path="/whatsapp" element={<WhatsappHub />} />
             <Route path="/new-order" element={<NewOrder />} />
+            <Route path="/order-sources" element={<OrderSources />} />
+            <Route path="/inventory" element={<InventoryPlanner />} />
+            <Route path="/revenue" element={<RevenueDashboard />} />
             <Route path="*" element={<Navigate to="/orders" replace />} />
           </Routes>
         </Layout>

@@ -19,6 +19,7 @@ let Customer = class Customer {
     contact;
     gender;
     location;
+    address;
     orders;
     createdAt;
     updatedAt;
@@ -44,6 +45,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'varchar', length: 100 }),
     __metadata("design:type", String)
 ], Customer.prototype, "location", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], Customer.prototype, "address", void 0);
 __decorate([
     (0, typeorm_1.OneToMany)(() => order_entity_1.Order, (order) => order.customer),
     __metadata("design:type", Array)

@@ -24,6 +24,9 @@ import CustomersIcon from '@mui/icons-material/People';
 import CalendarIcon from '@mui/icons-material/CalendarMonth';
 import WhatsappIcon from '@mui/icons-material/WhatsApp';
 import NewOrderIcon from '@mui/icons-material/AddCircleOutlined';
+import InventoryIcon from '@mui/icons-material/Inventory';
+import RevenueIcon from '@mui/icons-material/MonetizationOn';
+import SourceIcon from '@mui/icons-material/Settings';
 import DarkModeIcon from '@mui/icons-material/Brightness4';
 import LightModeIcon from '@mui/icons-material/Brightness7';
 import ActiveIcon from '@mui/icons-material/RadioButtonChecked';
@@ -41,10 +44,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const menuItems = [
     { text: 'Create Order', icon: <NewOrderIcon />, path: '/new-order' },
     { text: 'Orders Dashboard', icon: <OrdersIcon />, path: '/orders' },
+    { text: 'Inventory Planner', icon: <InventoryIcon />, path: '/inventory' },
+    { text: 'Revenue Reports', icon: <RevenueIcon />, path: '/revenue' },
     { text: 'Snack Catalog', icon: <ItemsIcon />, path: '/items' },
     { text: 'Customer Insights', icon: <CustomersIcon />, path: '/customers' },
     { text: 'Content Calendar', icon: <CalendarIcon />, path: '/social-media' },
     { text: 'WhatsApp Hub', icon: <WhatsappIcon />, path: '/whatsapp' },
+    { text: 'Order Sources', icon: <SourceIcon />, path: '/order-sources' },
   ];
 
   const handleDrawerToggle = () => {

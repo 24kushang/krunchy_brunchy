@@ -9,6 +9,9 @@ const order_item_entity_1 = require("../entities/order-item.entity");
 const order_status_history_entity_1 = require("../entities/order-status-history.entity");
 const whatsapp_log_entity_1 = require("../entities/whatsapp-log.entity");
 const social_media_content_entity_1 = require("../entities/social-media-content.entity");
+const order_source_entity_1 = require("../entities/order-source.entity");
+const inventory_location_entity_1 = require("../entities/inventory-location.entity");
+const item_inventory_entity_1 = require("../entities/item-inventory.entity");
 const enums_1 = require("../entities/enums");
 async function seed() {
     console.log('Initializing database connection...');
@@ -21,7 +24,10 @@ async function seed() {
     await data_source_1.AppDataSource.query('TRUNCATE TABLE "orders" CASCADE');
     await data_source_1.AppDataSource.query('TRUNCATE TABLE "customers" CASCADE');
     await data_source_1.AppDataSource.query('TRUNCATE TABLE "item_price_history" CASCADE');
+    await data_source_1.AppDataSource.query('TRUNCATE TABLE "item_inventories" CASCADE');
     await data_source_1.AppDataSource.query('TRUNCATE TABLE "items" CASCADE');
+    await data_source_1.AppDataSource.query('TRUNCATE TABLE "inventory_locations" CASCADE');
+    await data_source_1.AppDataSource.query('TRUNCATE TABLE "order_sources" CASCADE');
     await data_source_1.AppDataSource.query('TRUNCATE TABLE "social_media_content" CASCADE');
     const queryRunner = data_source_1.AppDataSource.createQueryRunner();
     console.log('Seeding items...');
@@ -63,6 +69,32 @@ async function seed() {
         await data_source_1.AppDataSource.manager.save(histPrice3);
         items.push(savedItem);
     }
+    console.log('Seeding order sources...');
+    const sourceNames = ['WhatsApp', 'Phone', 'Instagram', 'Website', 'Walk-in'];
+    const orderSourcesMap = {};
+    for (const name of sourceNames) {
+        const src = new order_source_entity_1.OrderSource();
+        src.name = name;
+        orderSourcesMap[name] = await data_source_1.AppDataSource.manager.save(order_source_entity_1.OrderSource, src);
+    }
+    console.log('Seeding inventory locations...');
+    const hubWest = new inventory_location_entity_1.InventoryLocation();
+    hubWest.name = 'Hub West';
+    const savedHubWest = await data_source_1.AppDataSource.manager.save(inventory_location_entity_1.InventoryLocation, hubWest);
+    const hubSouth = new inventory_location_entity_1.InventoryLocation();
+    hubSouth.name = 'Hub South';
+    const savedHubSouth = await data_source_1.AppDataSource.manager.save(inventory_location_entity_1.InventoryLocation, hubSouth);
+    const hubs = [savedHubWest, savedHubSouth];
+    console.log('Seeding item inventories...');
+    for (const item of items) {
+        for (const hub of hubs) {
+            const inv = new item_inventory_entity_1.ItemInventory();
+            inv.item = item;
+            inv.location = hub;
+            inv.quantity = Math.floor(Math.random() * 45) + 5;
+            await data_source_1.AppDataSource.manager.save(item_inventory_entity_1.ItemInventory, inv);
+        }
+    }
     console.log('Seeding customers...');
     const locations = ['Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Ahmedabad'];
     const customerNames = [
@@ -95,6 +127,7 @@ async function seed() {
         customer.gender = c.gender;
         customer.location = locations[index % locations.length];
         customer.contact = `+91 ${9876543200 + index}`;
+        customer.address = `${index + 101}, Snacker's Lane, Sector ${index % 5 + 1}, ${customer.location}`;
         const savedCustomer = await data_source_1.AppDataSource.manager.save(customer);
         customers.push(savedCustomer);
         index++;
@@ -143,10 +176,32 @@ async function seed() {
         order.createdAt = orderDate;
         order.updatedAt = orderDate;
         order.totalAmount = 0;
-        const sources = [enums_1.OrderSource.WHATSAPP, enums_1.OrderSource.PHONE, enums_1.OrderSource.INSTAGRAM, enums_1.OrderSource.WEBSITE, enums_1.OrderSource.WALK_IN];
-        order.source = sources[i % sources.length];
-        order.expectedDeliveryDate = new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+        const sources = ['WhatsApp', 'Phone', 'Instagram', 'Website', 'Walk-in'];
+        order.source = orderSourcesMap[sources[i % sources.length]];
+        const westLocations = ['Mumbai', 'Pune', 'Ahmedabad'];
+        const assignedHub = westLocations.includes(customer.location) ? savedHubWest : savedHubSouth;
+        order.fulfillmentHub = assignedHub;
+        if (Math.random() < 0.85) {
+            order.expectedDeliveryDate = new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+        }
         order.deliveryLocation = `${customer.location} Delivery Point #${(i % 3) + 1}`;
+        if (status === enums_1.OrderStatus.DELIVERED) {
+            order.paymentStatus = enums_1.PaymentStatus.PAID;
+            const modes = [enums_1.PaymentMode.UPI, enums_1.PaymentMode.CARD, enums_1.PaymentMode.CASH, enums_1.PaymentMode.NET_BANKING];
+            order.paymentMode = modes[i % modes.length];
+            order.paymentUpdatedAt = new Date(orderDate.getTime() + 24 * 60 * 60 * 1000);
+            if (order.paymentMode === enums_1.PaymentMode.CASH) {
+                order.cashCollectionDetails = i % 2 === 0 ? 'Counter Register A' : 'Delivery Rider - Suresh';
+            }
+        }
+        else {
+            order.paymentStatus = enums_1.PaymentStatus.UNPAID;
+            if (Math.random() < 0.1) {
+                order.paymentStatus = enums_1.PaymentStatus.PAID;
+                order.paymentMode = enums_1.PaymentMode.UPI;
+                order.paymentUpdatedAt = new Date(orderDate.getTime() + 2 * 60 * 60 * 1000);
+            }
+        }
         const savedOrder = await data_source_1.AppDataSource.manager.save(order);
         const numItemsInOrder = 1 + Math.floor(Math.random() * 3);
         const chosenItems = [...items].sort(() => 0.5 - Math.random()).slice(0, numItemsInOrder);

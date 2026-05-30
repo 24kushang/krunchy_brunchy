@@ -6,6 +6,7 @@ export declare class Customer {
     contact: string;
     gender: Gender;
     location: string;
+    address: string | null;
     orders: Order[];
     createdAt: Date;
     updatedAt: Date;

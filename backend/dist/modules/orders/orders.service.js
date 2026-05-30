@@ -21,6 +21,8 @@ const order_item_entity_1 = require("../../database/entities/order-item.entity")
 const order_status_history_entity_1 = require("../../database/entities/order-status-history.entity");
 const customer_entity_1 = require("../../database/entities/customer.entity");
 const item_entity_1 = require("../../database/entities/item.entity");
+const order_source_entity_1 = require("../../database/entities/order-source.entity");
+const inventory_location_entity_1 = require("../../database/entities/inventory-location.entity");
 const enums_1 = require("../../database/entities/enums");
 const whatsapp_service_1 = require("../whatsapp/whatsapp.service");
 let OrdersService = class OrdersService {
@@ -44,6 +46,8 @@ let OrdersService = class OrdersService {
         const skip = (page - 1) * limit;
         const qb = this.orderRepository.createQueryBuilder('order')
             .leftJoinAndSelect('order.customer', 'customer')
+            .leftJoinAndSelect('order.source', 'source')
+            .leftJoinAndSelect('order.fulfillmentHub', 'fulfillmentHub')
             .leftJoinAndSelect('order.items', 'items')
             .leftJoinAndSelect('items.item', 'item');
         if (query.status) {
@@ -75,6 +79,8 @@ let OrdersService = class OrdersService {
             where: { id },
             relations: {
                 customer: true,
+                source: true,
+                fulfillmentHub: true,
                 items: {
                     item: true,
                 },
@@ -104,7 +110,30 @@ let OrdersService = class OrdersService {
                 customer.name = data.customerName;
                 customer.gender = data.customerGender;
                 customer.location = data.customerLocation;
+                customer.address = data.customerAddress || null;
                 customer = await manager.save(customer_entity_1.Customer, customer);
+            }
+            else {
+                let changed = false;
+                if (data.customerName && customer.name !== data.customerName) {
+                    customer.name = data.customerName;
+                    changed = true;
+                }
+                if (data.customerGender && customer.gender !== data.customerGender) {
+                    customer.gender = data.customerGender;
+                    changed = true;
+                }
+                if (data.customerLocation && customer.location !== data.customerLocation) {
+                    customer.location = data.customerLocation;
+                    changed = true;
+                }
+                if (data.customerAddress !== undefined && customer.address !== data.customerAddress) {
+                    customer.address = data.customerAddress || null;
+                    changed = true;
+                }
+                if (changed) {
+                    customer = await manager.save(customer_entity_1.Customer, customer);
+                }
             }
             const lastOrder = await manager.findOne(order_entity_1.Order, {
                 where: {},
@@ -121,10 +150,42 @@ let OrdersService = class OrdersService {
             const order = new order_entity_1.Order();
             order.orderNumber = orderNumber;
             order.customer = customer;
-            order.status = enums_1.OrderStatus.PENDING;
+            order.status = data.status || enums_1.OrderStatus.PENDING;
+            order.paymentStatus = enums_1.PaymentStatus.UNPAID;
             order.totalAmount = 0;
-            if (data.source) {
-                order.source = data.source;
+            if (data.sourceId) {
+                let sourceObj = null;
+                if (data.sourceId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+                    sourceObj = await manager.findOne(order_source_entity_1.OrderSource, { where: { id: data.sourceId } });
+                }
+                else {
+                    sourceObj = await manager.findOne(order_source_entity_1.OrderSource, { where: { name: data.sourceId } });
+                    if (!sourceObj) {
+                        sourceObj = new order_source_entity_1.OrderSource();
+                        sourceObj.name = data.sourceId;
+                        sourceObj = await manager.save(order_source_entity_1.OrderSource, sourceObj);
+                    }
+                }
+                if (sourceObj) {
+                    order.source = sourceObj;
+                }
+            }
+            if (data.fulfillmentHubId) {
+                let hubObj = null;
+                if (data.fulfillmentHubId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+                    hubObj = await manager.findOne(inventory_location_entity_1.InventoryLocation, { where: { id: data.fulfillmentHubId } });
+                }
+                else {
+                    hubObj = await manager.findOne(inventory_location_entity_1.InventoryLocation, { where: { name: data.fulfillmentHubId } });
+                    if (!hubObj) {
+                        hubObj = new inventory_location_entity_1.InventoryLocation();
+                        hubObj.name = data.fulfillmentHubId;
+                        hubObj = await manager.save(inventory_location_entity_1.InventoryLocation, hubObj);
+                    }
+                }
+                if (hubObj) {
+                    order.fulfillmentHub = hubObj;
+                }
             }
             if (data.expectedDeliveryDate) {
                 order.expectedDeliveryDate = new Date(data.expectedDeliveryDate);
@@ -159,7 +220,7 @@ let OrdersService = class OrdersService {
             const finalizedOrder = await manager.save(order_entity_1.Order, savedOrder);
             const history = new order_status_history_entity_1.OrderStatusHistory();
             history.order = finalizedOrder;
-            history.status = enums_1.OrderStatus.PENDING;
+            history.status = finalizedOrder.status;
             history.changedBy = 'Admin';
             await manager.save(order_status_history_entity_1.OrderStatusHistory, history);
             return finalizedOrder;
@@ -188,6 +249,331 @@ let OrdersService = class OrdersService {
             await this.whatsappService.triggerNotification(updatedOrder, 'Order Delivered (Payment Confirmed)');
         }
         return updatedOrder;
+    }
+    async updatePayment(id, paymentStatus, paymentMode, cashDetails) {
+        const order = await this.findOne(id);
+        order.paymentStatus = paymentStatus;
+        if (paymentStatus === enums_1.PaymentStatus.PAID) {
+            order.paymentMode = paymentMode || null;
+            order.cashCollectionDetails = paymentMode === enums_1.PaymentMode.CASH ? cashDetails || null : null;
+            order.paymentUpdatedAt = new Date();
+        }
+        else {
+            order.paymentMode = null;
+            order.cashCollectionDetails = null;
+            order.paymentUpdatedAt = null;
+        }
+        return this.orderRepository.save(order);
+    }
+    async getRevenueMetrics() {
+        const paidOrders = await this.orderRepository.find({
+            where: { paymentStatus: enums_1.PaymentStatus.PAID },
+            relations: { customer: true },
+            order: { paymentUpdatedAt: 'DESC' },
+        });
+        const unpaidOrders = await this.orderRepository.find({
+            where: { paymentStatus: enums_1.PaymentStatus.UNPAID },
+        });
+        const totalPaidRevenue = paidOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+        const totalPendingRevenue = unpaidOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+        const modeBreakdown = {};
+        paidOrders.forEach((o) => {
+            const mode = o.paymentMode || 'Unknown';
+            modeBreakdown[mode] = (modeBreakdown[mode] || 0) + Number(o.totalAmount);
+        });
+        const cashLogs = paidOrders
+            .filter((o) => o.paymentMode === enums_1.PaymentMode.CASH)
+            .map((o) => ({
+            orderId: o.id,
+            orderNumber: o.orderNumber,
+            customerName: o.customer?.name || 'Walk-in',
+            amount: o.totalAmount,
+            collectedAt: o.cashCollectionDetails || 'N/A',
+            timestamp: o.paymentUpdatedAt,
+        }));
+        const timelineData = {};
+        const now = new Date();
+        for (let i = 29; i >= 0; i--) {
+            const dateStr = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toLocaleDateString();
+            timelineData[dateStr] = 0;
+        }
+        paidOrders.forEach((o) => {
+            if (o.paymentUpdatedAt) {
+                const dateStr = new Date(o.paymentUpdatedAt).toLocaleDateString();
+                if (timelineData[dateStr] !== undefined) {
+                    timelineData[dateStr] += Number(o.totalAmount);
+                }
+            }
+        });
+        const timeline = Object.keys(timelineData).map((date) => ({
+            date,
+            revenue: timelineData[date],
+        }));
+        return {
+            totalPaidRevenue,
+            totalPendingRevenue,
+            modeBreakdown,
+            cashLogs,
+            timeline,
+        };
+    }
+    async importOrders(csvText) {
+        const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length < 2) {
+            return { successCount: 0, errors: ['CSV content is empty or contains no data rows'] };
+        }
+        const parseCSVLine = (line) => {
+            const row = [];
+            let insideQuote = false;
+            let entry = '';
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    insideQuote = !insideQuote;
+                }
+                else if (char === ',' && !insideQuote) {
+                    row.push(entry.trim());
+                    entry = '';
+                }
+                else {
+                    entry += char;
+                }
+            }
+            row.push(entry.trim());
+            return row;
+        };
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[\s_]+/g, ''));
+        const headerIndices = {};
+        headers.forEach((h, idx) => {
+            headerIndices[h] = idx;
+        });
+        const getVal = (row, key) => {
+            const idx = headerIndices[key];
+            if (idx === undefined || idx >= row.length)
+                return '';
+            return row[idx];
+        };
+        const errors = [];
+        let successCount = 0;
+        for (let rowIndex = 1; rowIndex < lines.length; rowIndex++) {
+            const row = parseCSVLine(lines[rowIndex]);
+            if (row.length === 0 || (row.length === 1 && !row[0]))
+                continue;
+            const orderNumber = getVal(row, 'ordernumber');
+            const orderDateStr = getVal(row, 'orderdate');
+            const name = getVal(row, 'customername');
+            const contact = getVal(row, 'customercontact');
+            const gender = getVal(row, 'customergender');
+            const location = getVal(row, 'customerlocation');
+            const address = getVal(row, 'customeraddress');
+            const sourceName = getVal(row, 'ordersource');
+            const hubName = getVal(row, 'fulfillmenthub');
+            const expectedDeliveryDateStr = getVal(row, 'expecteddeliverydate');
+            const deliveryLocation = getVal(row, 'deliverylocation');
+            const itemsStr = getVal(row, 'items');
+            const totalAmountStr = getVal(row, 'totalamount');
+            const orderStatusStr = getVal(row, 'orderstatus');
+            const paymentStatusStr = getVal(row, 'paymentstatus');
+            const paymentModeStr = getVal(row, 'paymentmode');
+            const cashDetails = getVal(row, 'cashcollectiondetails');
+            const label = `Row ${rowIndex + 1} (${orderNumber || contact || 'Unknown'}): `;
+            if (!name || !contact || !location || !sourceName || !deliveryLocation || !itemsStr || !orderStatusStr || !paymentStatusStr) {
+                errors.push(`${label}Missing required columns (Customer Name, Contact, Location, Order Source, Delivery Location, Items, Order Status, and Payment Status are required)`);
+                continue;
+            }
+            let status;
+            if (Object.values(enums_1.OrderStatus).map(v => v.toLowerCase()).includes(orderStatusStr.toLowerCase())) {
+                status = Object.values(enums_1.OrderStatus).find(v => v.toLowerCase() === orderStatusStr.toLowerCase());
+            }
+            else {
+                errors.push(`${label}Invalid Order Status '${orderStatusStr}'`);
+                continue;
+            }
+            let paymentStatus;
+            if (paymentStatusStr.toLowerCase() === 'paid') {
+                paymentStatus = enums_1.PaymentStatus.PAID;
+            }
+            else if (paymentStatusStr.toLowerCase() === 'unpaid') {
+                paymentStatus = enums_1.PaymentStatus.UNPAID;
+            }
+            else {
+                errors.push(`${label}Invalid Payment Status '${paymentStatusStr}' (must be Paid or Unpaid)`);
+                continue;
+            }
+            let paymentMode = null;
+            if (paymentStatus === enums_1.PaymentStatus.PAID && paymentModeStr) {
+                if (Object.values(enums_1.PaymentMode).map(v => v.toLowerCase()).includes(paymentModeStr.toLowerCase())) {
+                    paymentMode = Object.values(enums_1.PaymentMode).find(v => v.toLowerCase() === paymentModeStr.toLowerCase());
+                }
+                else {
+                    errors.push(`${label}Invalid Payment Mode '${paymentModeStr}'`);
+                    continue;
+                }
+            }
+            let customerGender = enums_1.Gender.MALE;
+            if (gender.toLowerCase() === 'female') {
+                customerGender = enums_1.Gender.FEMALE;
+            }
+            else if (gender.toLowerCase() === 'other') {
+                customerGender = enums_1.Gender.OTHER;
+            }
+            const itemsList = [];
+            const itemsParts = itemsStr.split(',').map(p => p.trim());
+            let itemsError = false;
+            for (const part of itemsParts) {
+                const colonIdx = part.lastIndexOf(':');
+                if (colonIdx === -1) {
+                    errors.push(`${label}Invalid Items format. Expected ItemName:Quantity`);
+                    itemsError = true;
+                    break;
+                }
+                const itemName = part.substring(0, colonIdx).trim();
+                const qtyVal = parseInt(part.substring(colonIdx + 1).trim(), 10);
+                if (!itemName || isNaN(qtyVal) || qtyVal <= 0) {
+                    errors.push(`${label}Invalid Item Name or quantity in '${part}'`);
+                    itemsError = true;
+                    break;
+                }
+                const itemObj = await this.itemRepository.findOne({
+                    where: { name: (0, typeorm_2.Like)(`%${itemName}%`) }
+                });
+                if (!itemObj) {
+                    errors.push(`${label}Item '${itemName}' not found in Snacking Catalog`);
+                    itemsError = true;
+                    break;
+                }
+                itemsList.push({ itemId: itemObj.id, name: itemObj.name, quantity: qtyVal });
+            }
+            if (itemsError)
+                continue;
+            try {
+                await this.dataSource.transaction(async (manager) => {
+                    let customer = await manager.findOne(customer_entity_1.Customer, { where: { contact } });
+                    if (!customer) {
+                        customer = new customer_entity_1.Customer();
+                        customer.contact = contact;
+                        customer.name = name;
+                        customer.gender = customerGender;
+                        customer.location = location;
+                        customer.address = address || null;
+                        customer = await manager.save(customer_entity_1.Customer, customer);
+                    }
+                    else {
+                        let customerChanged = false;
+                        if (name && customer.name !== name) {
+                            customer.name = name;
+                            customerChanged = true;
+                        }
+                        if (address !== undefined && customer.address !== address) {
+                            customer.address = address || null;
+                            customerChanged = true;
+                        }
+                        if (location && customer.location !== location) {
+                            customer.location = location;
+                            customerChanged = true;
+                        }
+                        if (customerChanged) {
+                            customer = await manager.save(customer_entity_1.Customer, customer);
+                        }
+                    }
+                    let sourceObj = await manager.findOne(order_source_entity_1.OrderSource, { where: { name: (0, typeorm_2.Like)(`%${sourceName}%`) } });
+                    if (!sourceObj) {
+                        sourceObj = new order_source_entity_1.OrderSource();
+                        sourceObj.name = sourceName;
+                        sourceObj = await manager.save(order_source_entity_1.OrderSource, sourceObj);
+                    }
+                    let hubObj = null;
+                    if (hubName) {
+                        hubObj = await manager.findOne(inventory_location_entity_1.InventoryLocation, { where: { name: (0, typeorm_2.Like)(`%${hubName}%`) } });
+                    }
+                    if (!hubObj) {
+                        hubObj = await manager.findOne(inventory_location_entity_1.InventoryLocation, { order: { name: 'ASC' } });
+                    }
+                    let resolvedOrderNumber = orderNumber;
+                    if (resolvedOrderNumber) {
+                        const existingOrder = await manager.findOne(order_entity_1.Order, { where: { orderNumber: resolvedOrderNumber } });
+                        if (existingOrder) {
+                            throw new Error(`Order Number '${resolvedOrderNumber}' already exists`);
+                        }
+                    }
+                    else {
+                        const lastOrder = await manager.findOne(order_entity_1.Order, {
+                            where: {},
+                            order: { orderNumber: 'DESC' },
+                        });
+                        let nextSerial = 10001;
+                        if (lastOrder && lastOrder.orderNumber.startsWith('KB-')) {
+                            const lastSerial = parseInt(lastOrder.orderNumber.replace('KB-', ''), 10);
+                            if (!isNaN(lastSerial)) {
+                                nextSerial = lastSerial + 1;
+                            }
+                        }
+                        resolvedOrderNumber = `KB-${nextSerial}`;
+                    }
+                    const order = new order_entity_1.Order();
+                    order.orderNumber = resolvedOrderNumber;
+                    order.customer = customer;
+                    order.status = status;
+                    order.paymentStatus = paymentStatus;
+                    order.paymentMode = paymentMode;
+                    order.cashCollectionDetails = paymentMode === enums_1.PaymentMode.CASH ? cashDetails || null : null;
+                    order.source = sourceObj;
+                    order.fulfillmentHub = hubObj;
+                    if (orderDateStr) {
+                        order.createdAt = new Date(orderDateStr);
+                    }
+                    if (expectedDeliveryDateStr) {
+                        order.expectedDeliveryDate = new Date(expectedDeliveryDateStr);
+                    }
+                    if (deliveryLocation) {
+                        order.deliveryLocation = deliveryLocation;
+                    }
+                    if (paymentStatus === enums_1.PaymentStatus.PAID) {
+                        order.paymentUpdatedAt = orderDateStr ? new Date(orderDateStr) : new Date();
+                    }
+                    order.totalAmount = 0;
+                    const savedOrder = await manager.save(order_entity_1.Order, order);
+                    let totalAmount = 0;
+                    for (const itemReq of itemsList) {
+                        const itemObj = await manager.findOne(item_entity_1.Item, {
+                            where: { id: itemReq.itemId },
+                            relations: { priceHistory: true }
+                        });
+                        if (!itemObj)
+                            throw new Error(`Item ${itemReq.name} not found`);
+                        const sortedHistory = [...itemObj.priceHistory].sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime());
+                        const priceAtOrder = sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price) : 0;
+                        const orderItem = new order_item_entity_1.OrderItem();
+                        orderItem.order = savedOrder;
+                        orderItem.item = itemObj;
+                        orderItem.quantity = itemReq.quantity;
+                        orderItem.priceAtOrder = priceAtOrder;
+                        await manager.save(order_item_entity_1.OrderItem, orderItem);
+                        totalAmount += priceAtOrder * itemReq.quantity;
+                    }
+                    if (totalAmountStr && !isNaN(parseFloat(totalAmountStr))) {
+                        savedOrder.totalAmount = parseFloat(totalAmountStr);
+                    }
+                    else {
+                        savedOrder.totalAmount = Math.round(totalAmount * 100) / 100;
+                    }
+                    const finalizedOrder = await manager.save(order_entity_1.Order, savedOrder);
+                    const history = new order_status_history_entity_1.OrderStatusHistory();
+                    history.order = finalizedOrder;
+                    history.status = status;
+                    history.changedBy = 'Import Manager';
+                    if (orderDateStr) {
+                        history.changedAt = new Date(orderDateStr);
+                    }
+                    await manager.save(order_status_history_entity_1.OrderStatusHistory, history);
+                });
+                successCount++;
+            }
+            catch (err) {
+                errors.push(`${label}${err.message || err}`);
+            }
+        }
+        return { successCount, errors };
     }
 };
 exports.OrdersService = OrdersService;

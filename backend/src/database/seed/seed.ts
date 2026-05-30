@@ -7,7 +7,10 @@ import { OrderItem } from '../entities/order-item.entity';
 import { OrderStatusHistory } from '../entities/order-status-history.entity';
 import { WhatsappLog } from '../entities/whatsapp-log.entity';
 import { SocialMediaContent } from '../entities/social-media-content.entity';
-import { Gender, OrderStatus, WhatsappLogStatus, OrderSource } from '../entities/enums';
+import { OrderSource } from '../entities/order-source.entity';
+import { InventoryLocation } from '../entities/inventory-location.entity';
+import { ItemInventory } from '../entities/item-inventory.entity';
+import { Gender, OrderStatus, WhatsappLogStatus, PaymentStatus, PaymentMode } from '../entities/enums';
 
 
 async function seed() {
@@ -23,7 +26,10 @@ async function seed() {
   await AppDataSource.query('TRUNCATE TABLE "orders" CASCADE');
   await AppDataSource.query('TRUNCATE TABLE "customers" CASCADE');
   await AppDataSource.query('TRUNCATE TABLE "item_price_history" CASCADE');
+  await AppDataSource.query('TRUNCATE TABLE "item_inventories" CASCADE');
   await AppDataSource.query('TRUNCATE TABLE "items" CASCADE');
+  await AppDataSource.query('TRUNCATE TABLE "inventory_locations" CASCADE');
+  await AppDataSource.query('TRUNCATE TABLE "order_sources" CASCADE');
   await AppDataSource.query('TRUNCATE TABLE "social_media_content" CASCADE');
 
   const queryRunner = AppDataSource.createQueryRunner();
@@ -79,6 +85,40 @@ async function seed() {
     items.push(savedItem);
   }
 
+  // 1b. Seed Order Sources
+  console.log('Seeding order sources...');
+  const sourceNames = ['WhatsApp', 'Phone', 'Instagram', 'Website', 'Walk-in'];
+  const orderSourcesMap: Record<string, OrderSource> = {};
+  for (const name of sourceNames) {
+    const src = new OrderSource();
+    src.name = name;
+    orderSourcesMap[name] = await AppDataSource.manager.save(OrderSource, src);
+  }
+
+  // 1c. Seed Inventory Locations
+  console.log('Seeding inventory locations...');
+  const hubWest = new InventoryLocation();
+  hubWest.name = 'Hub West';
+  const savedHubWest = await AppDataSource.manager.save(InventoryLocation, hubWest);
+
+  const hubSouth = new InventoryLocation();
+  hubSouth.name = 'Hub South';
+  const savedHubSouth = await AppDataSource.manager.save(InventoryLocation, hubSouth);
+
+  const hubs = [savedHubWest, savedHubSouth];
+
+  // 1d. Seed Item Inventories (Stock levels for each item at each hub)
+  console.log('Seeding item inventories...');
+  for (const item of items) {
+    for (const hub of hubs) {
+      const inv = new ItemInventory();
+      inv.item = item;
+      inv.location = hub;
+      inv.quantity = Math.floor(Math.random() * 45) + 5; // 5 to 50 items
+      await AppDataSource.manager.save(ItemInventory, inv);
+    }
+  }
+
   // 2. Seed Customers
   console.log('Seeding customers...');
   const locations = ['Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Ahmedabad'];
@@ -113,6 +153,7 @@ async function seed() {
     customer.gender = c.gender;
     customer.location = locations[index % locations.length];
     customer.contact = `+91 ${9876543200 + index}`;
+    customer.address = `${index + 101}, Snacker's Lane, Sector ${index % 5 + 1}, ${customer.location}`;
     const savedCustomer = await AppDataSource.manager.save(customer);
     customers.push(savedCustomer);
     index++;
@@ -173,10 +214,39 @@ async function seed() {
     order.updatedAt = orderDate;
     order.totalAmount = 0; // Will compute from items
     
-    const sources = [OrderSource.WHATSAPP, OrderSource.PHONE, OrderSource.INSTAGRAM, OrderSource.WEBSITE, OrderSource.WALK_IN];
-    order.source = sources[i % sources.length];
-    order.expectedDeliveryDate = new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+    // Assign Order Source
+    const sources = ['WhatsApp', 'Phone', 'Instagram', 'Website', 'Walk-in'];
+    order.source = orderSourcesMap[sources[i % sources.length]];
+
+    // Assign Fulfillment Hub based on location (Mumbai, Pune, Ahmedabad -> Hub West, others -> Hub South)
+    const westLocations = ['Mumbai', 'Pune', 'Ahmedabad'];
+    const assignedHub = westLocations.includes(customer.location) ? savedHubWest : savedHubSouth;
+    order.fulfillmentHub = assignedHub;
+    
+    // Assign Expected Delivery Date (optional - set on 85% of orders)
+    if (Math.random() < 0.85) {
+      order.expectedDeliveryDate = new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+    }
     order.deliveryLocation = `${customer.location} Delivery Point #${(i % 3) + 1}`;
+
+    // Set Payment details
+    if (status === OrderStatus.DELIVERED) {
+      order.paymentStatus = PaymentStatus.PAID;
+      const modes = [PaymentMode.UPI, PaymentMode.CARD, PaymentMode.CASH, PaymentMode.NET_BANKING];
+      order.paymentMode = modes[i % modes.length];
+      order.paymentUpdatedAt = new Date(orderDate.getTime() + 24 * 60 * 60 * 1000); // 1 day after order
+      if (order.paymentMode === PaymentMode.CASH) {
+        order.cashCollectionDetails = i % 2 === 0 ? 'Counter Register A' : 'Delivery Rider - Suresh';
+      }
+    } else {
+      order.paymentStatus = PaymentStatus.UNPAID;
+      // 10% chance of unpaid/pending order being paid
+      if (Math.random() < 0.1) {
+        order.paymentStatus = PaymentStatus.PAID;
+        order.paymentMode = PaymentMode.UPI;
+        order.paymentUpdatedAt = new Date(orderDate.getTime() + 2 * 60 * 60 * 1000); // 2 hours after order
+      }
+    }
 
     const savedOrder = await AppDataSource.manager.save(order);
 

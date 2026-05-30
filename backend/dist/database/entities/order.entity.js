@@ -16,10 +16,17 @@ const order_item_entity_1 = require("./order-item.entity");
 const order_status_history_entity_1 = require("./order-status-history.entity");
 const whatsapp_log_entity_1 = require("./whatsapp-log.entity");
 const enums_1 = require("./enums");
+const order_source_entity_1 = require("./order-source.entity");
+const inventory_location_entity_1 = require("./inventory-location.entity");
 let Order = class Order {
     id;
     orderNumber;
     source;
+    paymentStatus;
+    paymentMode;
+    cashCollectionDetails;
+    paymentUpdatedAt;
+    fulfillmentHub;
     expectedDeliveryDate;
     deliveryLocation;
     customer;
@@ -41,16 +48,38 @@ __decorate([
     __metadata("design:type", String)
 ], Order.prototype, "orderNumber", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.OrderSource, default: enums_1.OrderSource.PHONE }),
-    __metadata("design:type", String)
+    (0, typeorm_1.ManyToOne)(() => order_source_entity_1.OrderSource, { eager: true, nullable: true, onDelete: 'SET NULL' }),
+    (0, typeorm_1.JoinColumn)({ name: 'sourceId' }),
+    __metadata("design:type", Object)
 ], Order.prototype, "source", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.PaymentStatus, default: enums_1.PaymentStatus.UNPAID }),
+    __metadata("design:type", String)
+], Order.prototype, "paymentStatus", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.PaymentMode, nullable: true }),
+    __metadata("design:type", Object)
+], Order.prototype, "paymentMode", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", Object)
+], Order.prototype, "cashCollectionDetails", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'timestamp', nullable: true }),
-    __metadata("design:type", Date)
+    __metadata("design:type", Object)
+], Order.prototype, "paymentUpdatedAt", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => inventory_location_entity_1.InventoryLocation, { eager: true, nullable: true, onDelete: 'SET NULL' }),
+    (0, typeorm_1.JoinColumn)({ name: 'fulfillmentHubId' }),
+    __metadata("design:type", Object)
+], Order.prototype, "fulfillmentHub", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true }),
+    __metadata("design:type", Object)
 ], Order.prototype, "expectedDeliveryDate", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'varchar', length: 255, nullable: true }),
-    __metadata("design:type", String)
+    __metadata("design:type", Object)
 ], Order.prototype, "deliveryLocation", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => customer_entity_1.Customer, (customer) => customer.orders, { eager: true, onDelete: 'CASCADE' }),

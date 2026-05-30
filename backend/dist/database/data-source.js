@@ -44,6 +44,9 @@ const order_item_entity_1 = require("./entities/order-item.entity");
 const order_status_history_entity_1 = require("./entities/order-status-history.entity");
 const whatsapp_log_entity_1 = require("./entities/whatsapp-log.entity");
 const social_media_content_entity_1 = require("./entities/social-media-content.entity");
+const order_source_entity_1 = require("./entities/order-source.entity");
+const inventory_location_entity_1 = require("./entities/inventory-location.entity");
+const item_inventory_entity_1 = require("./entities/item-inventory.entity");
 dotenv.config();
 exports.AppDataSource = new typeorm_1.DataSource({
     type: 'postgres',
@@ -61,6 +64,9 @@ exports.AppDataSource = new typeorm_1.DataSource({
         order_status_history_entity_1.OrderStatusHistory,
         whatsapp_log_entity_1.WhatsappLog,
         social_media_content_entity_1.SocialMediaContent,
+        order_source_entity_1.OrderSource,
+        inventory_location_entity_1.InventoryLocation,
+        item_inventory_entity_1.ItemInventory,
     ],
     migrations: [__dirname + '/migrations/*{.ts,.js}'],
     synchronize: false,

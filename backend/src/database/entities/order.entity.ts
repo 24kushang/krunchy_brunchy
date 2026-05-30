@@ -1,10 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { Customer } from './customer.entity';
 import { OrderItem } from './order-item.entity';
 import { OrderStatusHistory } from './order-status-history.entity';
 import { WhatsappLog } from './whatsapp-log.entity';
-import { OrderStatus, OrderSource } from './enums';
-
+import { OrderStatus, PaymentStatus, PaymentMode } from './enums';
+import { OrderSource } from './order-source.entity';
+import { InventoryLocation } from './inventory-location.entity';
 
 @Entity('orders')
 export class Order {
@@ -14,14 +15,31 @@ export class Order {
   @Column({ type: 'varchar', length: 50, unique: true })
   orderNumber: string;
 
-  @Column({ type: 'enum', enum: OrderSource, default: OrderSource.PHONE })
-  source: OrderSource;
+  @ManyToOne(() => OrderSource, { eager: true, nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'sourceId' })
+  source: OrderSource | null;
+
+  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.UNPAID })
+  paymentStatus: PaymentStatus;
+
+  @Column({ type: 'enum', enum: PaymentMode, nullable: true })
+  paymentMode: PaymentMode | null;
+
+  @Column({ type: 'text', nullable: true })
+  cashCollectionDetails: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  expectedDeliveryDate: Date;
+  paymentUpdatedAt: Date | null;
+
+  @ManyToOne(() => InventoryLocation, { eager: true, nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'fulfillmentHubId' })
+  fulfillmentHub: InventoryLocation | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  expectedDeliveryDate: Date | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  deliveryLocation: string;
+  deliveryLocation: string | null;
 
   @ManyToOne(() => Customer, (customer) => customer.orders, { eager: true, onDelete: 'CASCADE' })
   customer: Customer;

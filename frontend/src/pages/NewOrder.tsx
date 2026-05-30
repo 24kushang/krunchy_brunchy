@@ -48,6 +48,7 @@ interface Customer {
   contact: string;
   gender: string;
   location: string;
+  address?: string;
 }
 
 export default function NewOrder() {
@@ -69,12 +70,20 @@ export default function NewOrder() {
   const [customerContact, setCustomerContact] = useState('');
   const [customerGender, setCustomerGender] = useState('Male');
   const [customerLocation, setCustomerLocation] = useState('Mumbai');
+  const [customerAddress, setCustomerAddress] = useState('');
   const [isNewCustomer, setIsNewCustomer] = useState(true);
 
   // Order Details
   const [orderSource, setOrderSource] = useState('Phone');
+  const [fulfillmentHub, setFulfillmentHub] = useState('Hub West');
+  const [hubsList, setHubsList] = useState<{ id: string; name: string }[]>([
+    { id: 'Hub West', name: 'Hub West' },
+    { id: 'Hub South', name: 'Hub South' }
+  ]);
+  const [sourcesList, setSourcesList] = useState<{ id: string; name: string }[]>([]);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [deliveryLocation, setDeliveryLocation] = useState('');
+  const [orderStatus, setOrderStatus] = useState('Pending');
 
   // Submission / Alert feedback
   const [submitting, setSubmitting] = useState(false);
@@ -84,7 +93,7 @@ export default function NewOrder() {
 
   const successBoxRef = useRef<HTMLDivElement>(null);
 
-  // Fetch items
+  // Fetch items and configurations
   useEffect(() => {
     api.get('/api/items')
       .then((res) => {
@@ -95,6 +104,24 @@ export default function NewOrder() {
         console.error('Failed to load items', err);
         setLoadingItems(false);
       });
+
+    Promise.all([
+      api.get('/api/inventories'),
+      api.get('/api/order-sources')
+    ]).then(([invRes, sourceRes]) => {
+      const hubs = invRes.data.locations || [];
+      const sources = sourceRes.data || [];
+      if (hubs.length > 0) {
+        setHubsList(hubs);
+        setFulfillmentHub(hubs[0].id);
+      }
+      if (sources.length > 0) {
+        setSourcesList(sources);
+        setOrderSource(sources[0].id);
+      }
+    }).catch(err => {
+      console.error('Failed to load configurations', err);
+    });
   }, []);
 
   // Debounced customer search (300ms) for Quick Lookup dropdown
@@ -136,6 +163,7 @@ export default function NewOrder() {
             setCustomerName(exactMatch.name);
             setCustomerGender(exactMatch.gender);
             setCustomerLocation(exactMatch.location);
+            setCustomerAddress(exactMatch.address || '');
             setIsNewCustomer(false);
           } else {
             setSelectedCustomer(null);
@@ -157,12 +185,14 @@ export default function NewOrder() {
       setCustomerContact(customer.contact);
       setCustomerGender(customer.gender);
       setCustomerLocation(customer.location);
+      setCustomerAddress(customer.address || '');
       setIsNewCustomer(false);
     } else {
       setCustomerName('');
       setCustomerContact('');
       setCustomerGender('Male');
-      setCustomerLocation('Mumbai');
+      setCustomerLocation('');
+      setCustomerAddress('');
       setIsNewCustomer(true);
     }
   };
@@ -204,11 +234,6 @@ export default function NewOrder() {
       return;
     }
 
-    if (!expectedDeliveryDate) {
-      setErrorMsg('Please specify expected Delivery Date.');
-      return;
-    }
-
     if (!deliveryLocation.trim()) {
       setErrorMsg('Please specify Expected Location of Delivery.');
       return;
@@ -222,9 +247,12 @@ export default function NewOrder() {
       customerName,
       customerGender,
       customerLocation,
-      source: orderSource,
-      expectedDeliveryDate,
+      customerAddress,
+      sourceId: orderSource || undefined,
+      fulfillmentHubId: fulfillmentHub || undefined,
+      expectedDeliveryDate: expectedDeliveryDate || undefined,
       deliveryLocation,
+      status: orderStatus,
       items: Object.keys(cart).map((itemId) => ({
         itemId,
         quantity: cart[itemId],
@@ -251,12 +279,15 @@ export default function NewOrder() {
       setCustomerContact('');
       setCustomerName('');
       setCustomerGender('Male');
-      setCustomerLocation('Mumbai');
+      setCustomerLocation('');
+      setCustomerAddress('');
       setSelectedCustomer(null);
       setSearchQuery('');
-      setOrderSource('Phone');
+      if (sourcesList.length > 0) setOrderSource(sourcesList[0].id);
+      if (hubsList.length > 0) setFulfillmentHub(hubsList[0].id);
       setExpectedDeliveryDate('');
       setDeliveryLocation('');
+      setOrderStatus('Pending');
       setIsNewCustomer(true);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Checkout failed. Check inputs.');
@@ -319,12 +350,12 @@ export default function NewOrder() {
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
-                    label="Customer Contact Number"
+                    label="Customer Name"
                     fullWidth
-                    value={customerContact}
+                    value={customerName}
                     onChange={(e) => {
-                      setCustomerContact(e.target.value);
-                      if (selectedCustomer && selectedCustomer.contact !== e.target.value) {
+                      setCustomerName(e.target.value);
+                      if (selectedCustomer && selectedCustomer.name !== e.target.value) {
                         setSelectedCustomer(null);
                         setIsNewCustomer(true);
                       }
@@ -334,12 +365,12 @@ export default function NewOrder() {
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
-                    label="Customer Name"
+                    label="Customer Contact Number"
                     fullWidth
-                    value={customerName}
+                    value={customerContact}
                     onChange={(e) => {
-                      setCustomerName(e.target.value);
-                      if (selectedCustomer && selectedCustomer.name !== e.target.value) {
+                      setCustomerContact(e.target.value);
+                      if (selectedCustomer && selectedCustomer.contact !== e.target.value) {
                         setSelectedCustomer(null);
                         setIsNewCustomer(true);
                       }
@@ -368,26 +399,37 @@ export default function NewOrder() {
                   </FormControl>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Location / City</InputLabel>
-                    <Select
-                      value={customerLocation}
-                      label="Location / City"
-                      onChange={(e) => {
-                        setCustomerLocation(e.target.value);
-                        if (selectedCustomer && selectedCustomer.location !== e.target.value) {
-                          setSelectedCustomer(null);
-                          setIsNewCustomer(true);
-                        }
-                      }}
-                    >
-                      <MenuItem value="Mumbai">Mumbai</MenuItem>
-                      <MenuItem value="Delhi">Delhi</MenuItem>
-                      <MenuItem value="Bangalore">Bangalore</MenuItem>
-                      <MenuItem value="Pune">Pune</MenuItem>
-                      <MenuItem value="Ahmedabad">Ahmedabad</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    label="Location / City"
+                    fullWidth
+                    size="small"
+                    value={customerLocation}
+                    onChange={(e) => {
+                      setCustomerLocation(e.target.value);
+                      if (selectedCustomer && selectedCustomer.location !== e.target.value) {
+                        setSelectedCustomer(null);
+                        setIsNewCustomer(true);
+                      }
+                    }}
+                    required
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    label="Customer Address (for future reference)"
+                    fullWidth
+                    multiline
+                    rows={2}
+                    value={customerAddress}
+                    onChange={(e) => {
+                      setCustomerAddress(e.target.value);
+                      if (selectedCustomer && selectedCustomer.address !== e.target.value) {
+                        setSelectedCustomer(null);
+                        setIsNewCustomer(true);
+                      }
+                    }}
+                    placeholder="Enter customer address..."
+                  />
                 </Grid>
               </Grid>
 
@@ -427,11 +469,39 @@ export default function NewOrder() {
                       label="Source of Order"
                       onChange={(e) => setOrderSource(e.target.value)}
                     >
-                      <MenuItem value="Phone">Phone</MenuItem>
-                      <MenuItem value="WhatsApp">WhatsApp</MenuItem>
-                      <MenuItem value="Instagram">Instagram</MenuItem>
-                      <MenuItem value="Website">Website</MenuItem>
-                      <MenuItem value="Walk-in">Walk-in</MenuItem>
+                      {sourcesList.map((src) => (
+                        <MenuItem key={src.id} value={src.id}>{src.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Fulfillment Hub</InputLabel>
+                    <Select
+                      value={fulfillmentHub}
+                      label="Fulfillment Hub"
+                      onChange={(e) => setFulfillmentHub(e.target.value)}
+                    >
+                      {hubsList.map((hub) => (
+                        <MenuItem key={hub.id} value={hub.id}>{hub.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Order Status</InputLabel>
+                    <Select
+                      value={orderStatus}
+                      label="Order Status"
+                      onChange={(e) => setOrderStatus(e.target.value)}
+                    >
+                      <MenuItem value="Pending">Pending</MenuItem>
+                      <MenuItem value="Preparing">Preparing</MenuItem>
+                      <MenuItem value="Ready to Deliver">Ready to Deliver</MenuItem>
+                      <MenuItem value="Delivered">Delivered</MenuItem>
+                      <MenuItem value="Cancelled">Cancelled</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -444,7 +514,6 @@ export default function NewOrder() {
                     slotProps={{ inputLabel: { shrink: true } }}
                     value={expectedDeliveryDate}
                     onChange={(e) => setExpectedDeliveryDate(e.target.value)}
-                    required
                   />
                 </Grid>
                 <Grid size={{ xs: 12 }}>
