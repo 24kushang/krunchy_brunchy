@@ -57,7 +57,12 @@ export class OrdersController {
       expectedDeliveryDate?: string | Date;
       deliveryLocation?: string;
       status?: OrderStatus;
-      items: { itemId: string; quantity: number }[];
+      items: { itemId: string; quantity: number; priceAtOrder?: number }[];
+      createdAt?: string;
+      paymentStatus?: PaymentStatus;
+      paymentMode?: PaymentMode;
+      cashCollectionDetails?: string;
+      totalAmount?: number;
     },
   ) {
     return this.ordersService.create(body);

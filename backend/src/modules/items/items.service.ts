@@ -11,7 +11,7 @@ export class ItemsService {
     private readonly itemRepository: Repository<Item>,
     @InjectRepository(ItemPriceHistory)
     private readonly priceHistoryRepository: Repository<ItemPriceHistory>,
-  ) {}
+  ) { }
 
   async findAll(search?: string): Promise<any[]> {
     const qb = this.itemRepository.createQueryBuilder('item')
@@ -20,6 +20,8 @@ export class ItemsService {
     if (search) {
       qb.where('item.name ILIKE :search', { search: `%${search}%` });
     }
+
+    qb.orderBy('item.name', 'ASC');
 
     const items = await qb.getMany();
 
@@ -30,7 +32,7 @@ export class ItemsService {
         (a, b) => b.changedAt.getTime() - a.changedAt.getTime()
       );
       const activePrice = sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price as any) : 0;
-      
+
       return {
         id: item.id,
         name: item.name,

@@ -23,7 +23,8 @@ import {
   Backdrop,
   Chip,
   useTheme,
-  InputLabel
+  InputLabel,
+  Switch
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -84,6 +85,20 @@ export default function NewOrder() {
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [deliveryLocation, setDeliveryLocation] = useState('');
   const [orderStatus, setOrderStatus] = useState('Pending');
+
+  // Past Order States
+  const [isPastOrder, setIsPastOrder] = useState(false);
+  const [pastOrderDate, setPastOrderDate] = useState(() => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+  });
+  const [pastPaymentStatus, setPastPaymentStatus] = useState('Unpaid');
+  const [pastPaymentMode, setPastPaymentMode] = useState('UPI');
+  const [pastCashDetails, setPastCashDetails] = useState('');
+  const [itemPriceOverrides, setItemPriceOverrides] = useState<Record<string, number>>({});
+  const [overrideTotalPrice, setOverrideTotalPrice] = useState(false);
+  const [customTotalPrice, setCustomTotalPrice] = useState('');
 
   // Submission / Alert feedback
   const [submitting, setSubmitting] = useState(false);
@@ -211,15 +226,24 @@ export default function NewOrder() {
     });
   };
 
-  const calculateTotal = () => {
+  const calculateCartTotal = () => {
     return items.reduce((sum, item) => {
       const qty = cart[item.id] || 0;
-      return sum + (item.activePrice * qty);
+      const unitPrice = itemPriceOverrides[item.id] !== undefined ? itemPriceOverrides[item.id] : item.activePrice;
+      return sum + (unitPrice * qty);
     }, 0);
   };
 
+  const getFinalTotal = () => {
+    if (overrideTotalPrice && customTotalPrice.trim() !== '') {
+      const val = parseFloat(customTotalPrice);
+      return isNaN(val) ? calculateCartTotal() : val;
+    }
+    return calculateCartTotal();
+  };
+
   const handleCheckout = async () => {
-    if (calculateTotal() === 0) {
+    if (calculateCartTotal() === 0) {
       setErrorMsg('Cannot place order. Cart is empty!');
       return;
     }
@@ -239,10 +263,15 @@ export default function NewOrder() {
       return;
     }
 
+    if (isPastOrder && pastPaymentStatus === 'Paid' && pastPaymentMode === 'Cash' && !pastCashDetails.trim()) {
+      setErrorMsg('Please specify where cash was collected.');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMsg(null);
 
-    const payload = {
+    const payload: any = {
       customerContact,
       customerName,
       customerGender,
@@ -253,11 +282,34 @@ export default function NewOrder() {
       expectedDeliveryDate: expectedDeliveryDate || undefined,
       deliveryLocation,
       status: orderStatus,
-      items: Object.keys(cart).map((itemId) => ({
-        itemId,
-        quantity: cart[itemId],
-      })),
+      items: Object.keys(cart).map((itemId) => {
+        const itemReq: any = {
+          itemId,
+          quantity: cart[itemId],
+        };
+        if (isPastOrder && itemPriceOverrides[itemId] !== undefined) {
+          itemReq.priceAtOrder = itemPriceOverrides[itemId];
+        }
+        return itemReq;
+      }),
     };
+
+    if (isPastOrder) {
+      payload.createdAt = pastOrderDate;
+      payload.paymentStatus = pastPaymentStatus;
+      if (pastPaymentStatus === 'Paid') {
+        payload.paymentMode = pastPaymentMode;
+        if (pastPaymentMode === 'Cash') {
+          payload.cashCollectionDetails = pastCashDetails;
+        }
+      }
+      if (overrideTotalPrice && customTotalPrice.trim() !== '') {
+        const val = parseFloat(customTotalPrice);
+        if (!isNaN(val)) {
+          payload.totalAmount = val;
+        }
+      }
+    }
 
     try {
       const res = await api.post('/api/orders', payload);
@@ -289,6 +341,15 @@ export default function NewOrder() {
       setDeliveryLocation('');
       setOrderStatus('Pending');
       setIsNewCustomer(true);
+
+      // Reset past order states
+      setIsPastOrder(false);
+      setPastPaymentStatus('Unpaid');
+      setPastPaymentMode('UPI');
+      setPastCashDetails('');
+      setItemPriceOverrides({});
+      setOverrideTotalPrice(false);
+      setCustomTotalPrice('');
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Checkout failed. Check inputs.');
     } finally {
@@ -303,6 +364,37 @@ export default function NewOrder() {
           {errorMsg}
         </Alert>
       )}
+
+      <Card sx={{ mb: 3, border: isPastOrder ? '2px dashed #FF5A09' : '1px solid #EFEAE4', bgcolor: isPastOrder ? 'rgba(255, 90, 9, 0.02)' : 'background.paper', borderRadius: 4 }}>
+        <CardContent sx={{ py: 2, px: 3, '&:last-child': { pb: 2 } }}>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: isPastOrder ? '#FF5A09' : '#0A3BB0', fontWeight: 700 }}>
+                Order Mode: {isPastOrder ? 'Recording Historical Past Order' : 'Creating New Live Order'}
+              </Typography>
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                {isPastOrder
+                  ? 'Manually enter historical details: backdated order time, customized item prices, custom final invoice amount, and direct payment tracking.'
+                  : 'Place a new live order with current timestamp, default active pricing, and standard unpaid status.'}
+              </Typography>
+            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isPastOrder}
+                  onChange={(e) => setIsPastOrder(e.target.checked)}
+                  color="warning"
+                />
+              }
+              label={
+                <Typography sx={{ fontWeight: 800, fontSize: '0.9rem', color: isPastOrder ? '#FF5A09' : 'textSecondary' }}>
+                  Record Past Order
+                </Typography>
+              }
+            />
+          </Stack>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={3}>
         {/* Left Column: Customer Form & Item Selector */}
@@ -528,6 +620,72 @@ export default function NewOrder() {
                     required
                   />
                 </Grid>
+
+                {isPastOrder && (
+                  <>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        label="Historical Order Date & Time"
+                        type="datetime-local"
+                        fullWidth
+                        size="small"
+                        slotProps={{ inputLabel: { shrink: true } }}
+                        value={pastOrderDate}
+                        onChange={(e) => setPastOrderDate(e.target.value)}
+                        required
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="past-payment-status-label">Payment Status</InputLabel>
+                        <Select
+                          labelId="past-payment-status-label"
+                          id="past-payment-status-select"
+                          value={pastPaymentStatus}
+                          label="Payment Status"
+                          onChange={(e) => setPastPaymentStatus(e.target.value)}
+                        >
+                          <MenuItem value="Unpaid">Unpaid</MenuItem>
+                          <MenuItem value="Paid">Paid</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    {pastPaymentStatus === 'Paid' && (
+                      <>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel id="past-payment-mode-label">Payment Mode</InputLabel>
+                            <Select
+                              labelId="past-payment-mode-label"
+                              id="past-payment-mode-select"
+                              value={pastPaymentMode}
+                              label="Payment Mode"
+                              onChange={(e) => setPastPaymentMode(e.target.value)}
+                            >
+                              <MenuItem value="UPI">UPI (Online)</MenuItem>
+                              <MenuItem value="Cash">Cash</MenuItem>
+                              <MenuItem value="Card">Card Reader</MenuItem>
+                              <MenuItem value="Net Banking">Net Banking</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        {pastPaymentMode === 'Cash' && (
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                              label="Where was Cash collected?"
+                              placeholder="e.g. Counter Register A, Rider Rahul"
+                              fullWidth
+                              size="small"
+                              value={pastCashDetails}
+                              onChange={(e) => setPastCashDetails(e.target.value)}
+                              required
+                            />
+                          </Grid>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
               </Grid>
             </CardContent>
           </Card>
@@ -617,24 +775,48 @@ export default function NewOrder() {
                   {items.map((item) => {
                     const qty = cart[item.id] || 0;
                     if (qty === 0) return null;
+                    const unitPrice = itemPriceOverrides[item.id] !== undefined ? itemPriceOverrides[item.id] : item.activePrice;
                     return (
                       <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box>
+                        <Box sx={{ flexGrow: 1, mr: 1 }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                             {item.name}
                           </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {qty} x Rs. {item.activePrice}
-                          </Typography>
+                          {isPastOrder ? (
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
+                              <Typography variant="caption" color="textSecondary">
+                                {qty} x Rs.
+                              </Typography>
+                              <TextField
+                                type="number"
+                                size="small"
+                                variant="standard"
+                                value={itemPriceOverrides[item.id] !== undefined ? itemPriceOverrides[item.id] : item.activePrice}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setItemPriceOverrides(prev => ({
+                                    ...prev,
+                                    [item.id]: isNaN(val) ? 0 : val
+                                  }));
+                                }}
+                                slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                                sx={{ width: 60, '& input': { fontSize: '0.8rem', py: 0.2 } }}
+                              />
+                            </Stack>
+                          ) : (
+                            <Typography variant="caption" color="textSecondary">
+                              {qty} x Rs. {item.activePrice}
+                            </Typography>
+                          )}
                         </Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                          Rs. {item.activePrice * qty}
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          Rs. {(unitPrice * qty).toFixed(2)}
                         </Typography>
                       </Box>
                     );
                   })}
 
-                  {calculateTotal() === 0 && (
+                  {calculateCartTotal() === 0 && (
                     <Typography variant="body2" color="textSecondary" align="center" sx={{ py: 3 }}>
                       No items selected. Select quantities from the catalog.
                     </Typography>
@@ -643,12 +825,46 @@ export default function NewOrder() {
 
                 <Divider sx={{ mb: 2 }} />
 
+                {isPastOrder && (
+                  <Box sx={{ mb: 2 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={overrideTotalPrice}
+                          onChange={(e) => setOverrideTotalPrice(e.target.checked)}
+                          color="warning"
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          Override Final Total Price
+                        </Typography>
+                      }
+                    />
+                    {overrideTotalPrice && (
+                      <TextField
+                        label="Override Total Price (Rs.)"
+                        type="number"
+                        size="small"
+                        fullWidth
+                        value={customTotalPrice}
+                        onChange={(e) => setCustomTotalPrice(e.target.value)}
+                        placeholder="e.g. 500"
+                        sx={{ mt: 1 }}
+                        slotProps={{ htmlInput: { min: 0, step: "0.01" } }}
+                        required
+                      />
+                    )}
+                  </Box>
+                )}
+
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                   <Typography variant="h6" sx={{ fontWeight: 800 }}>
                     Total Amount:
                   </Typography>
                   <Typography variant="h5" color="primary" sx={{ fontWeight: 800 }}>
-                    Rs. {calculateTotal().toFixed(2)}
+                    Rs. {getFinalTotal().toFixed(2)}
                   </Typography>
                 </Box>
 
@@ -657,7 +873,7 @@ export default function NewOrder() {
                   color="secondary"
                   size="large"
                   fullWidth
-                  disabled={calculateTotal() === 0 || submitting}
+                  disabled={calculateCartTotal() === 0 || submitting}
                   onClick={handleCheckout}
                   startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <CheckoutIcon />}
                   sx={{

@@ -3,7 +3,7 @@ import { ItemsService } from './items.service';
 
 @Controller('api/items')
 export class ItemsController {
-  constructor(private readonly itemsService: ItemsService) {}
+  constructor(private readonly itemsService: ItemsService) { }
 
   @Get()
   async findAll(@Query('search') search?: string) {

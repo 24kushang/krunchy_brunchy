@@ -115,7 +115,12 @@ export class OrdersService {
     expectedDeliveryDate?: string | Date;
     deliveryLocation?: string;
     status?: OrderStatus;
-    items: { itemId: string; quantity: number }[];
+    items: { itemId: string; quantity: number; priceAtOrder?: number }[];
+    createdAt?: string | Date;
+    paymentStatus?: PaymentStatus;
+    paymentMode?: PaymentMode;
+    cashCollectionDetails?: string;
+    totalAmount?: number;
   }): Promise<Order> {
     if (!data.items || data.items.length === 0) {
       throw new BadRequestException('Order must contain at least one item');
@@ -186,8 +191,16 @@ export class OrdersService {
       order.orderNumber = orderNumber;
       order.customer = customer;
       order.status = data.status || OrderStatus.PENDING;
-      order.paymentStatus = PaymentStatus.UNPAID;
+      order.paymentStatus = data.paymentStatus || PaymentStatus.UNPAID;
+      order.paymentMode = data.paymentMode || null;
+      order.cashCollectionDetails = data.paymentMode === PaymentMode.CASH ? data.cashCollectionDetails || null : null;
       order.totalAmount = 0;
+      if (data.createdAt) {
+        order.createdAt = new Date(data.createdAt);
+      }
+      if (data.paymentStatus === PaymentStatus.PAID) {
+        order.paymentUpdatedAt = data.createdAt ? new Date(data.createdAt) : new Date();
+      }
       if (data.sourceId) {
         let sourceObj = null;
         if (data.sourceId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
@@ -240,16 +253,22 @@ export class OrdersService {
           throw new BadRequestException(`Item with ID ${itemRequest.itemId} not found`);
         }
 
-        // Get latest price
-        const sortedHistory = [...itemObj.priceHistory].sort(
-          (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
-        );
+        let priceAtOrder = 0;
+        if (itemRequest.priceAtOrder !== undefined && !isNaN(Number(itemRequest.priceAtOrder))) {
+          priceAtOrder = parseFloat(itemRequest.priceAtOrder as any);
+        } else {
+          // Get latest price
+          const sortedHistory = [...itemObj.priceHistory].sort(
+            (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
+          );
 
-        if (sortedHistory.length === 0) {
-          throw new BadRequestException(`Item ${itemObj.name} does not have any pricing history log`);
+          if (sortedHistory.length === 0) {
+            throw new BadRequestException(`Item ${itemObj.name} does not have any pricing history log`);
+          }
+
+          priceAtOrder = parseFloat(sortedHistory[0].price as any);
         }
 
-        const priceAtOrder = parseFloat(sortedHistory[0].price as any);
         const orderItem = new OrderItem();
         orderItem.order = savedOrder;
         orderItem.item = itemObj;
@@ -261,8 +280,12 @@ export class OrdersService {
         totalAmount += priceAtOrder * itemRequest.quantity;
       }
 
-      // Update total amount on order
-      savedOrder.totalAmount = Math.round(totalAmount * 100) / 100;
+      // Update total amount on order (use override if provided)
+      if (data.totalAmount !== undefined && !isNaN(Number(data.totalAmount))) {
+        savedOrder.totalAmount = parseFloat(data.totalAmount as any);
+      } else {
+        savedOrder.totalAmount = Math.round(totalAmount * 100) / 100;
+      }
       const finalizedOrder = await manager.save(Order, savedOrder);
 
       // 5. Add initial Status History log
@@ -270,6 +293,9 @@ export class OrdersService {
       history.order = finalizedOrder;
       history.status = finalizedOrder.status;
       history.changedBy = 'Admin';
+      if (data.createdAt) {
+        history.changedAt = new Date(data.createdAt);
+      }
       await manager.save(OrderStatusHistory, history);
 
       // 6. Trigger WhatsApp order confirmation
@@ -326,7 +352,7 @@ export class OrdersService {
   ): Promise<Order> {
     const order = await this.findOne(id);
     order.paymentStatus = paymentStatus;
-    
+
     if (paymentStatus === PaymentStatus.PAID) {
       order.paymentMode = paymentMode || null;
       order.cashCollectionDetails = paymentMode === PaymentMode.CASH ? cashDetails || null : null;
@@ -336,7 +362,7 @@ export class OrdersService {
       order.cashCollectionDetails = null;
       order.paymentUpdatedAt = null;
     }
-    
+
     return this.orderRepository.save(order);
   }
 
@@ -362,7 +388,7 @@ export class OrdersService {
     });
 
     const cashLogs = paidOrders
-      .filter((o) => o.paymentMode === PaymentMode.CASH)
+      // .filter((o) => o.paymentMode === PaymentMode.CASH)
       .map((o) => ({
         orderId: o.id,
         orderNumber: o.orderNumber,
@@ -371,6 +397,7 @@ export class OrdersService {
         collectedAt: o.cashCollectionDetails || 'N/A',
         timestamp: o.paymentUpdatedAt,
       }));
+    console.log(cashLogs)
 
     // Daily Timeline: last 30 days
     const timelineData: Record<string, number> = {};
@@ -615,7 +642,7 @@ export class OrdersService {
           order.cashCollectionDetails = paymentMode === PaymentMode.CASH ? cashDetails || null : null;
           order.source = sourceObj;
           order.fulfillmentHub = hubObj;
-          
+
           if (orderDateStr) {
             order.createdAt = new Date(orderDateStr);
           }
