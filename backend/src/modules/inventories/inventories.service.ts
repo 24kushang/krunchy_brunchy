@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ItemInventory } from '../../database/entities/item-inventory.entity';
@@ -33,7 +37,7 @@ export class InventoriesService {
 
     const itemStocks = items.map((item) => {
       const stocks: Record<string, number> = {};
-      
+
       // Initialize stocks for all locations to 0
       locations.forEach((loc) => {
         stocks[loc.id] = 0;
@@ -59,7 +63,11 @@ export class InventoriesService {
     };
   }
 
-  async adjustStock(itemId: string, locationId: string, quantity: number): Promise<ItemInventory> {
+  async adjustStock(
+    itemId: string,
+    locationId: string,
+    quantity: number,
+  ): Promise<ItemInventory> {
     if (quantity < 0) {
       throw new BadRequestException('Stock quantity cannot be negative');
     }
@@ -69,9 +77,13 @@ export class InventoriesService {
       throw new NotFoundException(`Item with ID ${itemId} not found`);
     }
 
-    const locationObj = await this.locationRepo.findOne({ where: { id: locationId } });
+    const locationObj = await this.locationRepo.findOne({
+      where: { id: locationId },
+    });
     if (!locationObj) {
-      throw new NotFoundException(`Inventory location with ID ${locationId} not found`);
+      throw new NotFoundException(
+        `Inventory location with ID ${locationId} not found`,
+      );
     }
 
     let inv = await this.itemInventoryRepo.findOne({
@@ -118,7 +130,7 @@ export class InventoriesService {
     // 3. Setup virtual stock maps for calculation
     const virtualStock: Record<string, Record<string, number>> = {};
     const originalStock: Record<string, Record<string, number>> = {};
-    
+
     locations.forEach((loc) => {
       virtualStock[loc.id] = {};
       originalStock[loc.id] = {};
@@ -135,7 +147,10 @@ export class InventoriesService {
     const defaultHub = locations[0] || null;
 
     const ordersPlanning = [];
-    const aggregatedShortages: Record<string, { itemId: string; itemName: string; requiredToProduce: number }> = {};
+    const aggregatedShortages: Record<
+      string,
+      { itemId: string; itemName: string; requiredToProduce: number }
+    > = {};
 
     // 4. Simulate allocation chronologically (FIFO)
     for (const order of activeOrders) {
@@ -163,7 +178,8 @@ export class InventoriesService {
         let allocated = 0;
 
         // Fetch virtual stock from the hub
-        const currentVirtual = (hubId && virtualStock[hubId] && virtualStock[hubId][itemId]) || 0;
+        const currentVirtual =
+          (hubId && virtualStock[hubId] && virtualStock[hubId][itemId]) || 0;
 
         if (currentVirtual >= requested) {
           allocated = requested;
@@ -204,7 +220,12 @@ export class InventoriesService {
           quantityRequested: requested,
           quantityAllocated: allocated,
           deficit,
-          status: allocated === requested ? 'Allocated' : allocated > 0 ? 'Partially Allocated' : 'Out of Stock',
+          status:
+            allocated === requested
+              ? 'Allocated'
+              : allocated > 0
+                ? 'Partially Allocated'
+                : 'Out of Stock',
         });
       }
 

@@ -15,7 +15,8 @@ import {
   useTheme,
   Chip,
   Divider,
-  Avatar
+  Avatar,
+  Button
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import OrdersIcon from '@mui/icons-material/ShoppingCart';
@@ -30,7 +31,9 @@ import SourceIcon from '@mui/icons-material/Settings';
 import DarkModeIcon from '@mui/icons-material/Brightness4';
 import LightModeIcon from '@mui/icons-material/Brightness7';
 import ActiveIcon from '@mui/icons-material/RadioButtonChecked';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import { useAppTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const drawerWidth = 260;
 
@@ -39,9 +42,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { mode, toggleTheme } = useAppTheme();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const menuItems = [
+  const baseMenuItems = [
     { text: 'Create Order', icon: <NewOrderIcon />, path: '/new-order' },
     { text: 'Orders Dashboard', icon: <OrdersIcon />, path: '/orders' },
     { text: 'Inventory Planner', icon: <InventoryIcon />, path: '/inventory' },
@@ -52,6 +56,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { text: 'WhatsApp Hub', icon: <WhatsappIcon />, path: '/whatsapp' },
     { text: 'Order Sources', icon: <SourceIcon />, path: '/order-sources' },
   ];
+
+  // Append User Management menu option only if the user is a SuperAdmin
+  const menuItems = user?.role === 'SuperAdmin'
+    ? [...baseMenuItems, { text: 'User Management', icon: <SupervisorAccountIcon />, path: '/users' }]
+    : baseMenuItems;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -164,7 +173,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </List>
 
       {/* Footer / System Status */}
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 3, pt: 0 }}>
         <Box
           sx={{
             p: 2,
@@ -181,9 +190,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               OMS Server Online
             </Typography>
           </Box>
-          <Typography variant="caption" color="textSecondary">
+          <Typography variant="caption" color="textSecondary" sx={{ mb: 1 }}>
             Version 1.0.0 (Admin Only)
           </Typography>
+          <Divider sx={{ borderColor: mode === 'light' ? '#EFEAE4' : '#2C2A28' }} />
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            onClick={logout}
+            sx={{
+              mt: 1,
+              textTransform: 'none',
+              fontFamily: '"Fredoka", sans-serif',
+              borderRadius: 2,
+              fontWeight: 'bold',
+            }}
+          >
+            Logout
+          </Button>
         </Box>
       </Box>
     </Box>
@@ -256,14 +281,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   fontFamily: '"Fredoka", sans-serif'
                 }}
               >
-                KB
+                {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'KB'}
               </Avatar>
               <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
-                  Operational Admin
+                  {user?.name || 'Operational Admin'}
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
-                  Superuser
+                  {user?.role === 'SuperAdmin' ? 'Super Admin' : 'Administrator'}
                 </Typography>
               </Box>
             </Box>

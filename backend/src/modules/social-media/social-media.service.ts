@@ -41,19 +41,23 @@ export class SocialMediaService {
     post.checklist = data.checklist || {
       'Graphic Design': false,
       'Caption Drafted': false,
-      'Approval': false,
-      'Published': false,
+      Approval: false,
+      Published: false,
     };
 
     return this.socialMediaRepository.save(post);
   }
 
-  async update(id: string, data: Partial<SocialMediaContent>): Promise<SocialMediaContent> {
+  async update(
+    id: string,
+    data: Partial<SocialMediaContent>,
+  ): Promise<SocialMediaContent> {
     const post = await this.findOne(id);
 
     if (data.title !== undefined) post.title = data.title;
     if (data.caption !== undefined) post.caption = data.caption;
-    if (data.scheduledAt !== undefined) post.scheduledAt = new Date(data.scheduledAt);
+    if (data.scheduledAt !== undefined)
+      post.scheduledAt = new Date(data.scheduledAt);
     if (data.mediaUrl !== undefined) post.mediaUrl = data.mediaUrl;
     if (data.platforms !== undefined) post.platforms = data.platforms;
     if (data.checklist !== undefined) post.checklist = data.checklist;

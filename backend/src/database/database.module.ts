@@ -12,6 +12,7 @@ import { SocialMediaContent } from './entities/social-media-content.entity';
 import { OrderSource } from './entities/order-source.entity';
 import { InventoryLocation } from './entities/inventory-location.entity';
 import { ItemInventory } from './entities/item-inventory.entity';
+import { User } from './entities/user.entity';
 
 @Module({
   imports: [
@@ -23,7 +24,10 @@ import { ItemInventory } from './entities/item-inventory.entity';
         host: configService.get<string>('DATABASE_HOST', 'localhost'),
         port: configService.get<number>('DATABASE_PORT', 5432),
         username: configService.get<string>('DATABASE_USER', 'admin'),
-        password: configService.get<string>('DATABASE_PASSWORD', 'development_password'),
+        password: configService.get<string>(
+          'DATABASE_PASSWORD',
+          'development_password',
+        ),
         database: configService.get<string>('DATABASE_NAME', 'oms_db'),
         entities: [
           Customer,
@@ -37,6 +41,7 @@ import { ItemInventory } from './entities/item-inventory.entity';
           OrderSource,
           InventoryLocation,
           ItemInventory,
+          User,
         ],
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
         synchronize: false,

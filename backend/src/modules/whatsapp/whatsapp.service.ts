@@ -57,16 +57,19 @@ export class WhatsappService {
   }
 
   // Triggered when order status transitions
-  async triggerNotification(order: Order, eventName: string): Promise<WhatsappLog> {
+  async triggerNotification(
+    order: Order,
+    eventName: string,
+  ): Promise<WhatsappLog> {
     const log = new WhatsappLog();
     log.order = order;
     log.recipientName = order.customer.name;
     log.recipientContact = order.customer.contact;
     log.triggeringEvent = eventName;
     log.status = WhatsappLogStatus.SENT; // initial sent status
-    
+
     const savedLog = await this.logRepository.save(log);
-    
+
     // Async worker queue simulation
     this.runMockWorker(savedLog.id);
 
@@ -75,7 +78,10 @@ export class WhatsappService {
 
   // Action button to retry a failed message
   async retryMessage(id: string): Promise<WhatsappLog> {
-    const log = await this.logRepository.findOne({ where: { id }, relations: { order: true } });
+    const log = await this.logRepository.findOne({
+      where: { id },
+      relations: { order: true },
+    });
     if (!log) {
       throw new NotFoundException(`WhatsApp log with ID ${id} not found`);
     }
@@ -105,10 +111,14 @@ export class WhatsappService {
         if (isFailed) {
           log.status = WhatsappLogStatus.FAILED;
           log.errorMessage = 'Meta Cloud API Endpoint Timeout (504)';
-          this.logger.warn(`WhatsApp notification delivery failed for Log ID ${logId}`);
+          this.logger.warn(
+            `WhatsApp notification delivery failed for Log ID ${logId}`,
+          );
         } else {
           log.status = WhatsappLogStatus.DELIVERED;
-          this.logger.log(`WhatsApp notification delivered successfully for Log ID ${logId}`);
+          this.logger.log(
+            `WhatsApp notification delivered successfully for Log ID ${logId}`,
+          );
         }
 
         await this.logRepository.save(log);

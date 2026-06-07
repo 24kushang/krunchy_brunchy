@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('social_media_content')
 export class SocialMediaContent {
@@ -16,7 +22,6 @@ export class SocialMediaContent {
 
   @Column({ type: 'varchar', nullable: true })
   mediaUrl: string | null;
-
 
   @Column({ type: 'simple-array' })
   platforms: string[];

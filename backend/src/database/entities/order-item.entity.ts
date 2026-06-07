@@ -16,9 +16,14 @@ export class OrderItem {
   @Column({ type: 'integer' })
   quantity: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, transformer: {
-    to: (value: number) => value,
-    from: (value: string) => parseFloat(value),
-  }})
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
   priceAtOrder: number;
 }

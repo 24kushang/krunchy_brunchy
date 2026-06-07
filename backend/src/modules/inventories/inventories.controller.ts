@@ -14,7 +14,11 @@ export class InventoriesController {
   async adjustStock(
     @Body() body: { itemId: string; locationId: string; quantity: number },
   ) {
-    return this.inventoriesService.adjustStock(body.itemId, body.locationId, body.quantity);
+    return this.inventoriesService.adjustStock(
+      body.itemId,
+      body.locationId,
+      body.quantity,
+    );
   }
 
   @Get('planning')

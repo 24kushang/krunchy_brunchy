@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Between, Like } from 'typeorm';
 import { Order } from '../../database/entities/order.entity';
@@ -9,7 +13,12 @@ import { Item } from '../../database/entities/item.entity';
 import { ItemPriceHistory } from '../../database/entities/item-price-history.entity';
 import { OrderSource } from '../../database/entities/order-source.entity';
 import { InventoryLocation } from '../../database/entities/inventory-location.entity';
-import { OrderStatus, Gender, PaymentStatus, PaymentMode } from '../../database/entities/enums';
+import {
+  OrderStatus,
+  Gender,
+  PaymentStatus,
+  PaymentMode,
+} from '../../database/entities/enums';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 @Injectable()
@@ -25,7 +34,7 @@ export class OrdersService {
     @InjectRepository(OrderStatusHistory)
     private readonly statusHistoryRepository: Repository<OrderStatusHistory>,
     private readonly whatsappService: WhatsappService,
-  ) { }
+  ) {}
 
   async findAll(query: {
     page?: number;
@@ -41,7 +50,8 @@ export class OrdersService {
     const limit = query.limit ? Number(query.limit) : 10;
     const skip = (page - 1) * limit;
 
-    const qb = this.orderRepository.createQueryBuilder('order')
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
       .leftJoinAndSelect('order.customer', 'customer')
       .leftJoinAndSelect('order.source', 'source')
       .leftJoinAndSelect('order.fulfillmentHub', 'fulfillmentHub')
@@ -134,7 +144,11 @@ export class OrdersService {
       });
 
       if (!customer) {
-        if (!data.customerName || !data.customerGender || !data.customerLocation) {
+        if (
+          !data.customerName ||
+          !data.customerGender ||
+          !data.customerLocation
+        ) {
           throw new BadRequestException(
             'Customer contact is new. Please provide Name, Gender, and Location to create a profile.',
           );
@@ -158,11 +172,17 @@ export class OrdersService {
           customer.gender = data.customerGender;
           changed = true;
         }
-        if (data.customerLocation && customer.location !== data.customerLocation) {
+        if (
+          data.customerLocation &&
+          customer.location !== data.customerLocation
+        ) {
           customer.location = data.customerLocation;
           changed = true;
         }
-        if (data.customerAddress !== undefined && customer.address !== data.customerAddress) {
+        if (
+          data.customerAddress !== undefined &&
+          customer.address !== data.customerAddress
+        ) {
           customer.address = data.customerAddress || null;
           changed = true;
         }
@@ -179,7 +199,10 @@ export class OrdersService {
 
       let nextSerial = 10001;
       if (lastOrder && lastOrder.orderNumber.startsWith('KB-')) {
-        const lastSerial = parseInt(lastOrder.orderNumber.replace('KB-', ''), 10);
+        const lastSerial = parseInt(
+          lastOrder.orderNumber.replace('KB-', ''),
+          10,
+        );
         if (!isNaN(lastSerial)) {
           nextSerial = lastSerial + 1;
         }
@@ -193,20 +216,33 @@ export class OrdersService {
       order.status = data.status || OrderStatus.PENDING;
       order.paymentStatus = data.paymentStatus || PaymentStatus.UNPAID;
       order.paymentMode = data.paymentMode || null;
-      order.cashCollectionDetails = data.paymentMode === PaymentMode.CASH ? data.cashCollectionDetails || null : null;
+      order.cashCollectionDetails =
+        data.paymentMode === PaymentMode.CASH
+          ? data.cashCollectionDetails || null
+          : null;
       order.totalAmount = 0;
       if (data.createdAt) {
         order.createdAt = new Date(data.createdAt);
       }
       if (data.paymentStatus === PaymentStatus.PAID) {
-        order.paymentUpdatedAt = data.createdAt ? new Date(data.createdAt) : new Date();
+        order.paymentUpdatedAt = data.createdAt
+          ? new Date(data.createdAt)
+          : new Date();
       }
       if (data.sourceId) {
         let sourceObj = null;
-        if (data.sourceId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
-          sourceObj = await manager.findOne(OrderSource, { where: { id: data.sourceId } });
+        if (
+          data.sourceId.match(
+            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+          )
+        ) {
+          sourceObj = await manager.findOne(OrderSource, {
+            where: { id: data.sourceId },
+          });
         } else {
-          sourceObj = await manager.findOne(OrderSource, { where: { name: data.sourceId } });
+          sourceObj = await manager.findOne(OrderSource, {
+            where: { name: data.sourceId },
+          });
           if (!sourceObj) {
             sourceObj = new OrderSource();
             sourceObj.name = data.sourceId;
@@ -219,10 +255,18 @@ export class OrdersService {
       }
       if (data.fulfillmentHubId) {
         let hubObj = null;
-        if (data.fulfillmentHubId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
-          hubObj = await manager.findOne(InventoryLocation, { where: { id: data.fulfillmentHubId } });
+        if (
+          data.fulfillmentHubId.match(
+            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+          )
+        ) {
+          hubObj = await manager.findOne(InventoryLocation, {
+            where: { id: data.fulfillmentHubId },
+          });
         } else {
-          hubObj = await manager.findOne(InventoryLocation, { where: { name: data.fulfillmentHubId } });
+          hubObj = await manager.findOne(InventoryLocation, {
+            where: { name: data.fulfillmentHubId },
+          });
           if (!hubObj) {
             hubObj = new InventoryLocation();
             hubObj.name = data.fulfillmentHubId;
@@ -250,11 +294,16 @@ export class OrdersService {
         });
 
         if (!itemObj) {
-          throw new BadRequestException(`Item with ID ${itemRequest.itemId} not found`);
+          throw new BadRequestException(
+            `Item with ID ${itemRequest.itemId} not found`,
+          );
         }
 
         let priceAtOrder = 0;
-        if (itemRequest.priceAtOrder !== undefined && !isNaN(Number(itemRequest.priceAtOrder))) {
+        if (
+          itemRequest.priceAtOrder !== undefined &&
+          !isNaN(Number(itemRequest.priceAtOrder))
+        ) {
           priceAtOrder = parseFloat(itemRequest.priceAtOrder as any);
         } else {
           // Get latest price
@@ -263,7 +312,9 @@ export class OrdersService {
           );
 
           if (sortedHistory.length === 0) {
-            throw new BadRequestException(`Item ${itemObj.name} does not have any pricing history log`);
+            throw new BadRequestException(
+              `Item ${itemObj.name} does not have any pricing history log`,
+            );
           }
 
           priceAtOrder = parseFloat(sortedHistory[0].price as any);
@@ -313,7 +364,11 @@ export class OrdersService {
   }
 
   // Update order status with transition logs and WhatsApp triggers
-  async updateStatus(id: string, newStatus: OrderStatus, changedBy = 'Admin'): Promise<Order> {
+  async updateStatus(
+    id: string,
+    newStatus: OrderStatus,
+    changedBy = 'Admin',
+  ): Promise<Order> {
     const order = await this.findOne(id);
     const oldStatus = order.status;
 
@@ -333,11 +388,20 @@ export class OrdersService {
 
     // Trigger WhatsApp notification hooks based on transition
     if (newStatus === OrderStatus.PENDING) {
-      await this.whatsappService.triggerNotification(updatedOrder, 'Order Created (Pending)');
+      await this.whatsappService.triggerNotification(
+        updatedOrder,
+        'Order Created (Pending)',
+      );
     } else if (newStatus === OrderStatus.READY_TO_DELIVER) {
-      await this.whatsappService.triggerNotification(updatedOrder, 'Ready to Deliver');
+      await this.whatsappService.triggerNotification(
+        updatedOrder,
+        'Ready to Deliver',
+      );
     } else if (newStatus === OrderStatus.DELIVERED) {
-      await this.whatsappService.triggerNotification(updatedOrder, 'Order Delivered (Payment Confirmed)');
+      await this.whatsappService.triggerNotification(
+        updatedOrder,
+        'Order Delivered (Payment Confirmed)',
+      );
     }
 
     return updatedOrder;
@@ -355,7 +419,8 @@ export class OrdersService {
 
     if (paymentStatus === PaymentStatus.PAID) {
       order.paymentMode = paymentMode || null;
-      order.cashCollectionDetails = paymentMode === PaymentMode.CASH ? cashDetails || null : null;
+      order.cashCollectionDetails =
+        paymentMode === PaymentMode.CASH ? cashDetails || null : null;
       order.paymentUpdatedAt = new Date();
     } else {
       order.paymentMode = null;
@@ -378,8 +443,14 @@ export class OrdersService {
       where: { paymentStatus: PaymentStatus.UNPAID },
     });
 
-    const totalPaidRevenue = paidOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
-    const totalPendingRevenue = unpaidOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+    const totalPaidRevenue = paidOrders.reduce(
+      (sum, o) => sum + Number(o.totalAmount),
+      0,
+    );
+    const totalPendingRevenue = unpaidOrders.reduce(
+      (sum, o) => sum + Number(o.totalAmount),
+      0,
+    );
 
     const modeBreakdown: Record<string, number> = {};
     paidOrders.forEach((o) => {
@@ -397,13 +468,15 @@ export class OrdersService {
         collectedAt: o.cashCollectionDetails || 'N/A',
         timestamp: o.paymentUpdatedAt,
       }));
-    console.log(cashLogs)
+    console.log(cashLogs);
 
     // Daily Timeline: last 30 days
     const timelineData: Record<string, number> = {};
     const now = new Date();
     for (let i = 29; i >= 0; i--) {
-      const dateStr = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toLocaleDateString();
+      const dateStr = new Date(
+        now.getTime() - i * 24 * 60 * 60 * 1000,
+      ).toLocaleDateString();
       timelineData[dateStr] = 0;
     }
 
@@ -430,10 +503,18 @@ export class OrdersService {
     };
   }
 
-  async importOrders(csvText: string): Promise<{ successCount: number; errors: string[] }> {
-    const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  async importOrders(
+    csvText: string,
+  ): Promise<{ successCount: number; errors: string[] }> {
+    const lines = csvText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
     if (lines.length < 2) {
-      return { successCount: 0, errors: ['CSV content is empty or contains no data rows'] };
+      return {
+        successCount: 0,
+        errors: ['CSV content is empty or contains no data rows'],
+      };
     }
 
     const parseCSVLine = (line: string): string[] => {
@@ -455,7 +536,9 @@ export class OrdersService {
       return row;
     };
 
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[\s_]+/g, ''));
+    const headers = parseCSVLine(lines[0]).map((h) =>
+      h.toLowerCase().replace(/[\s_]+/g, ''),
+    );
     const headerIndices: Record<string, number> = {};
     headers.forEach((h, idx) => {
       headerIndices[h] = idx;
@@ -494,14 +577,31 @@ export class OrdersService {
 
       const label = `Row ${rowIndex + 1} (${orderNumber || contact || 'Unknown'}): `;
 
-      if (!name || !contact || !location || !sourceName || !deliveryLocation || !itemsStr || !orderStatusStr || !paymentStatusStr) {
-        errors.push(`${label}Missing required columns (Customer Name, Contact, Location, Order Source, Delivery Location, Items, Order Status, and Payment Status are required)`);
+      if (
+        !name ||
+        !contact ||
+        !location ||
+        !sourceName ||
+        !deliveryLocation ||
+        !itemsStr ||
+        !orderStatusStr ||
+        !paymentStatusStr
+      ) {
+        errors.push(
+          `${label}Missing required columns (Customer Name, Contact, Location, Order Source, Delivery Location, Items, Order Status, and Payment Status are required)`,
+        );
         continue;
       }
 
       let status: OrderStatus;
-      if (Object.values(OrderStatus).map(v => v.toLowerCase()).includes(orderStatusStr.toLowerCase() as any)) {
-        status = Object.values(OrderStatus).find(v => v.toLowerCase() === orderStatusStr.toLowerCase()) as OrderStatus;
+      if (
+        Object.values(OrderStatus)
+          .map((v) => v.toLowerCase())
+          .includes(orderStatusStr.toLowerCase())
+      ) {
+        status = Object.values(OrderStatus).find(
+          (v) => v.toLowerCase() === orderStatusStr.toLowerCase(),
+        ) as OrderStatus;
       } else {
         errors.push(`${label}Invalid Order Status '${orderStatusStr}'`);
         continue;
@@ -513,14 +613,22 @@ export class OrdersService {
       } else if (paymentStatusStr.toLowerCase() === 'unpaid') {
         paymentStatus = PaymentStatus.UNPAID;
       } else {
-        errors.push(`${label}Invalid Payment Status '${paymentStatusStr}' (must be Paid or Unpaid)`);
+        errors.push(
+          `${label}Invalid Payment Status '${paymentStatusStr}' (must be Paid or Unpaid)`,
+        );
         continue;
       }
 
       let paymentMode: PaymentMode | null = null;
       if (paymentStatus === PaymentStatus.PAID && paymentModeStr) {
-        if (Object.values(PaymentMode).map(v => v.toLowerCase()).includes(paymentModeStr.toLowerCase() as any)) {
-          paymentMode = Object.values(PaymentMode).find(v => v.toLowerCase() === paymentModeStr.toLowerCase()) as PaymentMode;
+        if (
+          Object.values(PaymentMode)
+            .map((v) => v.toLowerCase())
+            .includes(paymentModeStr.toLowerCase())
+        ) {
+          paymentMode = Object.values(PaymentMode).find(
+            (v) => v.toLowerCase() === paymentModeStr.toLowerCase(),
+          ) as PaymentMode;
         } else {
           errors.push(`${label}Invalid Payment Mode '${paymentModeStr}'`);
           continue;
@@ -534,14 +642,17 @@ export class OrdersService {
         customerGender = Gender.OTHER;
       }
 
-      const itemsList: { itemId: string; name: string; quantity: number }[] = [];
-      const itemsParts = itemsStr.split(',').map(p => p.trim());
+      const itemsList: { itemId: string; name: string; quantity: number }[] =
+        [];
+      const itemsParts = itemsStr.split(',').map((p) => p.trim());
       let itemsError = false;
 
       for (const part of itemsParts) {
         const colonIdx = part.lastIndexOf(':');
         if (colonIdx === -1) {
-          errors.push(`${label}Invalid Items format. Expected ItemName:Quantity`);
+          errors.push(
+            `${label}Invalid Items format. Expected ItemName:Quantity`,
+          );
           itemsError = true;
           break;
         }
@@ -554,22 +665,30 @@ export class OrdersService {
         }
 
         const itemObj = await this.itemRepository.findOne({
-          where: { name: Like(`%${itemName}%`) }
+          where: { name: Like(`%${itemName}%`) },
         });
         if (!itemObj) {
-          errors.push(`${label}Item '${itemName}' not found in Snacking Catalog`);
+          errors.push(
+            `${label}Item '${itemName}' not found in Snacking Catalog`,
+          );
           itemsError = true;
           break;
         }
 
-        itemsList.push({ itemId: itemObj.id, name: itemObj.name, quantity: qtyVal });
+        itemsList.push({
+          itemId: itemObj.id,
+          name: itemObj.name,
+          quantity: qtyVal,
+        });
       }
 
       if (itemsError) continue;
 
       try {
         await this.dataSource.transaction(async (manager) => {
-          let customer = await manager.findOne(Customer, { where: { contact } });
+          let customer = await manager.findOne(Customer, {
+            where: { contact },
+          });
           if (!customer) {
             customer = new Customer();
             customer.contact = contact;
@@ -597,7 +716,9 @@ export class OrdersService {
             }
           }
 
-          let sourceObj = await manager.findOne(OrderSource, { where: { name: Like(`%${sourceName}%`) } });
+          let sourceObj = await manager.findOne(OrderSource, {
+            where: { name: Like(`%${sourceName}%`) },
+          });
           if (!sourceObj) {
             sourceObj = new OrderSource();
             sourceObj.name = sourceName;
@@ -606,17 +727,25 @@ export class OrdersService {
 
           let hubObj = null;
           if (hubName) {
-            hubObj = await manager.findOne(InventoryLocation, { where: { name: Like(`%${hubName}%`) } });
+            hubObj = await manager.findOne(InventoryLocation, {
+              where: { name: Like(`%${hubName}%`) },
+            });
           }
           if (!hubObj) {
-            hubObj = await manager.findOne(InventoryLocation, { order: { name: 'ASC' } });
+            hubObj = await manager.findOne(InventoryLocation, {
+              order: { name: 'ASC' },
+            });
           }
 
           let resolvedOrderNumber = orderNumber;
           if (resolvedOrderNumber) {
-            const existingOrder = await manager.findOne(Order, { where: { orderNumber: resolvedOrderNumber } });
+            const existingOrder = await manager.findOne(Order, {
+              where: { orderNumber: resolvedOrderNumber },
+            });
             if (existingOrder) {
-              throw new Error(`Order Number '${resolvedOrderNumber}' already exists`);
+              throw new Error(
+                `Order Number '${resolvedOrderNumber}' already exists`,
+              );
             }
           } else {
             const lastOrder = await manager.findOne(Order, {
@@ -625,7 +754,10 @@ export class OrdersService {
             });
             let nextSerial = 10001;
             if (lastOrder && lastOrder.orderNumber.startsWith('KB-')) {
-              const lastSerial = parseInt(lastOrder.orderNumber.replace('KB-', ''), 10);
+              const lastSerial = parseInt(
+                lastOrder.orderNumber.replace('KB-', ''),
+                10,
+              );
               if (!isNaN(lastSerial)) {
                 nextSerial = lastSerial + 1;
               }
@@ -639,7 +771,8 @@ export class OrdersService {
           order.status = status;
           order.paymentStatus = paymentStatus;
           order.paymentMode = paymentMode;
-          order.cashCollectionDetails = paymentMode === PaymentMode.CASH ? cashDetails || null : null;
+          order.cashCollectionDetails =
+            paymentMode === PaymentMode.CASH ? cashDetails || null : null;
           order.source = sourceObj;
           order.fulfillmentHub = hubObj;
 
@@ -653,7 +786,9 @@ export class OrdersService {
             order.deliveryLocation = deliveryLocation;
           }
           if (paymentStatus === PaymentStatus.PAID) {
-            order.paymentUpdatedAt = orderDateStr ? new Date(orderDateStr) : new Date();
+            order.paymentUpdatedAt = orderDateStr
+              ? new Date(orderDateStr)
+              : new Date();
           }
 
           order.totalAmount = 0;
@@ -663,14 +798,17 @@ export class OrdersService {
           for (const itemReq of itemsList) {
             const itemObj = await manager.findOne(Item, {
               where: { id: itemReq.itemId },
-              relations: { priceHistory: true }
+              relations: { priceHistory: true },
             });
             if (!itemObj) throw new Error(`Item ${itemReq.name} not found`);
 
             const sortedHistory = [...itemObj.priceHistory].sort(
               (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
             );
-            const priceAtOrder = sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price as any) : 0;
+            const priceAtOrder =
+              sortedHistory.length > 0
+                ? parseFloat(sortedHistory[0].price as any)
+                : 0;
 
             const orderItem = new OrderItem();
             orderItem.order = savedOrder;

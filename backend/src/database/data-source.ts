@@ -11,6 +11,7 @@ import { SocialMediaContent } from './entities/social-media-content.entity';
 import { OrderSource } from './entities/order-source.entity';
 import { InventoryLocation } from './entities/inventory-location.entity';
 import { ItemInventory } from './entities/item-inventory.entity';
+import { User } from './entities/user.entity';
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ export const AppDataSource = new DataSource({
     OrderSource,
     InventoryLocation,
     ItemInventory,
+    User,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

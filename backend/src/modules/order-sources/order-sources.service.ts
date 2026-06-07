@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrderSource } from '../../database/entities/order-source.entity';
@@ -27,9 +31,13 @@ export class OrderSourcesService {
       throw new BadRequestException('Name is required');
     }
     const trimmed = name.trim();
-    const existing = await this.orderSourceRepo.findOne({ where: { name: trimmed } });
+    const existing = await this.orderSourceRepo.findOne({
+      where: { name: trimmed },
+    });
     if (existing) {
-      throw new BadRequestException(`Order source with name "${trimmed}" already exists`);
+      throw new BadRequestException(
+        `Order source with name "${trimmed}" already exists`,
+      );
     }
     const source = new OrderSource();
     source.name = trimmed;
@@ -42,13 +50,17 @@ export class OrderSourcesService {
     }
     const trimmed = name.trim();
     const source = await this.findOne(id);
-    
+
     // Check if name is taken by another source
-    const existing = await this.orderSourceRepo.findOne({ where: { name: trimmed } });
+    const existing = await this.orderSourceRepo.findOne({
+      where: { name: trimmed },
+    });
     if (existing && existing.id !== id) {
-      throw new BadRequestException(`Order source with name "${trimmed}" already exists`);
+      throw new BadRequestException(
+        `Order source with name "${trimmed}" already exists`,
+      );
     }
-    
+
     source.name = trimmed;
     return this.orderSourceRepo.save(source);
   }

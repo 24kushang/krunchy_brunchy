@@ -1,9 +1,18 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { ItemsService } from './items.service';
 
 @Controller('api/items')
 export class ItemsController {
-  constructor(private readonly itemsService: ItemsService) { }
+  constructor(private readonly itemsService: ItemsService) {}
 
   @Get()
   async findAll(@Query('search') search?: string) {
@@ -17,7 +26,14 @@ export class ItemsController {
 
   @Post()
   async create(
-    @Body() body: { name: string; price: number; ingredients?: string[]; bestBeforeDays: number; imageUrl?: string },
+    @Body()
+    body: {
+      name: string;
+      price: number;
+      ingredients?: string[];
+      bestBeforeDays: number;
+      imageUrl?: string;
+    },
   ) {
     return this.itemsService.create(body);
   }
@@ -25,7 +41,14 @@ export class ItemsController {
   @Put(':id')
   async update(
     @Param('id') id: string,
-    @Body() body: { name?: string; price?: number; ingredients?: string[]; bestBeforeDays?: number; imageUrl?: string },
+    @Body()
+    body: {
+      name?: string;
+      price?: number;
+      ingredients?: string[];
+      bestBeforeDays?: number;
+      imageUrl?: string;
+    },
   ) {
     return this.itemsService.update(id, body);
   }

@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, Header, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Header,
+  Res,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { CustomersService } from './customers.service';
 import { Gender } from '../../database/entities/enums';
@@ -15,7 +26,13 @@ export class CustomersController {
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
   ) {
-    return this.customersService.findAll({ location, gender, search, sortBy, sortOrder });
+    return this.customersService.findAll({
+      location,
+      gender,
+      search,
+      sortBy,
+      sortOrder,
+    });
   }
 
   @Get('lookup')
@@ -36,7 +53,11 @@ export class CustomersController {
     @Query('gender') gender?: string,
     @Query('search') search?: string,
   ) {
-    const data = await this.customersService.findAll({ location, gender, search });
+    const data = await this.customersService.findAll({
+      location,
+      gender,
+      search,
+    });
     const csv = this.customersService.generateCSV(data);
     res.attachment('customers_directory.csv');
     return res.status(200).send(csv);
@@ -44,7 +65,14 @@ export class CustomersController {
 
   @Post()
   async create(
-    @Body() body: { name: string; contact: string; gender: Gender; location: string; address?: string },
+    @Body()
+    body: {
+      name: string;
+      contact: string;
+      gender: Gender;
+      location: string;
+      address?: string;
+    },
   ) {
     return this.customersService.create(body);
   }
@@ -52,7 +80,14 @@ export class CustomersController {
   @Put(':id')
   async update(
     @Param('id') id: string,
-    @Body() body: { name?: string; contact?: string; gender?: Gender; location?: string; address?: string },
+    @Body()
+    body: {
+      name?: string;
+      contact?: string;
+      gender?: Gender;
+      location?: string;
+      address?: string;
+    },
   ) {
     return this.customersService.update(id, body);
   }

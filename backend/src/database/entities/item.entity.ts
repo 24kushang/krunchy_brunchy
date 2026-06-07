@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from 'typeorm';
 import { ItemPriceHistory } from './item-price-history.entity';
 import { OrderItem } from './order-item.entity';
 
@@ -19,8 +26,9 @@ export class Item {
   @Column({ type: 'varchar', nullable: true })
   imageUrl: string | null;
 
-
-  @OneToMany(() => ItemPriceHistory, (history) => history.item, { cascade: true })
+  @OneToMany(() => ItemPriceHistory, (history) => history.item, {
+    cascade: true,
+  })
   priceHistory: ItemPriceHistory[];
 
   @OneToMany(() => OrderItem, (orderItem) => orderItem.item)

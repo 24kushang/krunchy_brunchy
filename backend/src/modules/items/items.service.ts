@@ -11,10 +11,11 @@ export class ItemsService {
     private readonly itemRepository: Repository<Item>,
     @InjectRepository(ItemPriceHistory)
     private readonly priceHistoryRepository: Repository<ItemPriceHistory>,
-  ) { }
+  ) {}
 
   async findAll(search?: string): Promise<any[]> {
-    const qb = this.itemRepository.createQueryBuilder('item')
+    const qb = this.itemRepository
+      .createQueryBuilder('item')
       .leftJoinAndSelect('item.priceHistory', 'priceHistory');
 
     if (search) {
@@ -26,12 +27,15 @@ export class ItemsService {
     const items = await qb.getMany();
 
     // Map items to include activePrice
-    return items.map(item => {
+    return items.map((item) => {
       // Find latest price history record
       const sortedHistory = [...item.priceHistory].sort(
-        (a, b) => b.changedAt.getTime() - a.changedAt.getTime()
+        (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
       );
-      const activePrice = sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price as any) : 0;
+      const activePrice =
+        sortedHistory.length > 0
+          ? parseFloat(sortedHistory[0].price as any)
+          : 0;
 
       return {
         id: item.id,
@@ -84,27 +88,32 @@ export class ItemsService {
     };
   }
 
-  async update(id: string, data: {
-    name?: string;
-    price?: number;
-    ingredients?: string[];
-    bestBeforeDays?: number;
-    imageUrl?: string;
-  }): Promise<any> {
+  async update(
+    id: string,
+    data: {
+      name?: string;
+      price?: number;
+      ingredients?: string[];
+      bestBeforeDays?: number;
+      imageUrl?: string;
+    },
+  ): Promise<any> {
     const item = await this.findOne(id);
 
     if (data.name !== undefined) item.name = data.name;
     if (data.ingredients !== undefined) item.ingredients = data.ingredients;
-    if (data.bestBeforeDays !== undefined) item.bestBeforeDays = data.bestBeforeDays;
+    if (data.bestBeforeDays !== undefined)
+      item.bestBeforeDays = data.bestBeforeDays;
     if (data.imageUrl !== undefined) item.imageUrl = data.imageUrl ?? null;
 
     const savedItem = await this.itemRepository.save(item);
 
     // Check if price has changed compared to the active price
     const sortedHistory = [...item.priceHistory].sort(
-      (a, b) => b.changedAt.getTime() - a.changedAt.getTime()
+      (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
     );
-    const activePrice = sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price as any) : 0;
+    const activePrice =
+      sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price as any) : 0;
 
     let updatedActivePrice = activePrice;
     if (data.price !== undefined && data.price !== activePrice) {

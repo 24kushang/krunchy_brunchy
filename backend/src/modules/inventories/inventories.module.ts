@@ -9,12 +9,7 @@ import { InventoriesController } from './inventories.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      ItemInventory,
-      InventoryLocation,
-      Item,
-      Order,
-    ]),
+    TypeOrmModule.forFeature([ItemInventory, InventoryLocation, Item, Order]),
   ],
   controllers: [InventoriesController],
   providers: [InventoriesService],

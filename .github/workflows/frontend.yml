@@ -2,9 +2,9 @@ name: Frontend CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build-and-deploy:
@@ -31,17 +31,23 @@ jobs:
         cd frontend
         npm run lint
 
+    - name: Set API URL based on Branch
+      run: |
+        if [ "${{ github.ref_name }}" = "main" ]; then
+          echo "VITE_API_URL=${{ secrets.PRODUCTION_API_URL }}" >> $GITHUB_ENV
+        else
+          echo "VITE_API_URL=${{ secrets.STAGING_API_URL }}" >> $GITHUB_ENV
+        fi
+
     - name: Compile and Build Production Bundle
       run: |
         cd frontend
         npm run build
-      env:
-        VITE_API_URL: http://localhost:3000
 
-    - name: Sync Static Bundle Assets to AWS S3
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        echo "Configuring AWS CLI credentials..."
-        echo "Syncing build folder to AWS S3 Static Website Hosting bucket..."
-        # aws s3 sync frontend/dist/ s3://krunchy-brunchy-oms-frontend --delete
-        echo "Static assets successfully deployed to AWS S3!"
+    - name: Deploy to Cloudflare Pages
+      if: github.event_name == 'push'
+      uses: cloudflare/wrangler-action@v3
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        command: pages deploy frontend/dist --project-name=krunchy-brunchy --branch=${{ github.ref_name }}

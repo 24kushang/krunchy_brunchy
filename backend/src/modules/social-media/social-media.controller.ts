@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+} from '@nestjs/common';
 import { SocialMediaService } from './social-media.service';
 import { SocialMediaContent } from '../../database/entities/social-media-content.entity';
 
@@ -13,7 +21,15 @@ export class SocialMediaController {
 
   @Post()
   async create(
-    @Body() body: { title: string; caption: string; scheduledAt: Date; mediaUrl?: string; platforms: string[]; checklist?: Record<string, boolean> },
+    @Body()
+    body: {
+      title: string;
+      caption: string;
+      scheduledAt: Date;
+      mediaUrl?: string;
+      platforms: string[];
+      checklist?: Record<string, boolean>;
+    },
   ) {
     return this.socialMediaService.create(body);
   }

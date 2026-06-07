@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Customer } from '../../database/entities/customer.entity';
@@ -18,11 +22,14 @@ export class CustomersService {
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
   }): Promise<any[]> {
-    const qb = this.customerRepository.createQueryBuilder('customer')
+    const qb = this.customerRepository
+      .createQueryBuilder('customer')
       .leftJoinAndSelect('customer.orders', 'order');
 
     if (query.location) {
-      qb.andWhere('customer.location = :location', { location: query.location });
+      qb.andWhere('customer.location = :location', {
+        location: query.location,
+      });
     }
 
     if (query.gender) {
@@ -30,18 +37,24 @@ export class CustomersService {
     }
 
     if (query.search) {
-      qb.andWhere('(customer.name ILIKE :search OR customer.contact ILIKE :search)', {
-        search: `%${query.search}%`,
-      });
+      qb.andWhere(
+        '(customer.name ILIKE :search OR customer.contact ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
 
     const customers = await qb.getMany();
 
     // Map customers with aggregates (LTV, order count)
-    const result = customers.map(c => {
+    const result = customers.map((c) => {
       const orderCount = c.orders ? c.orders.length : 0;
-      const ltv = c.orders 
-        ? c.orders.reduce((sum, order) => sum + parseFloat(order.totalAmount as any || 0), 0)
+      const ltv = c.orders
+        ? c.orders.reduce(
+            (sum, order) => sum + parseFloat((order.totalAmount as any) || 0),
+            0,
+          )
         : 0;
 
       return {
@@ -61,7 +74,7 @@ export class CustomersService {
     // Handle manual sort on computed fields (e.g. LTV, orderCount) or model columns
     const sortBy = query.sortBy || 'name';
     const sortOrder = query.sortOrder || 'ASC';
-    
+
     result.sort((a, b) => {
       let valA = (a as any)[sortBy];
       let valB = (b as any)[sortBy];
@@ -95,10 +108,20 @@ export class CustomersService {
     });
   }
 
-  async create(data: { name: string; contact: string; gender: Gender; location: string; address?: string }): Promise<Customer> {
-    const existing = await this.customerRepository.findOne({ where: { contact: data.contact } });
+  async create(data: {
+    name: string;
+    contact: string;
+    gender: Gender;
+    location: string;
+    address?: string;
+  }): Promise<Customer> {
+    const existing = await this.customerRepository.findOne({
+      where: { contact: data.contact },
+    });
     if (existing) {
-      throw new ConflictException(`Customer contact ${data.contact} already exists`);
+      throw new ConflictException(
+        `Customer contact ${data.contact} already exists`,
+      );
     }
 
     const customer = this.customerRepository.create(data);
@@ -107,11 +130,15 @@ export class CustomersService {
 
   async update(id: string, data: Partial<Customer>): Promise<Customer> {
     const customer = await this.findOne(id);
-    
+
     if (data.contact && data.contact !== customer.contact) {
-      const existing = await this.customerRepository.findOne({ where: { contact: data.contact } });
+      const existing = await this.customerRepository.findOne({
+        where: { contact: data.contact },
+      });
       if (existing) {
-        throw new ConflictException(`Customer contact ${data.contact} already exists`);
+        throw new ConflictException(
+          `Customer contact ${data.contact} already exists`,
+        );
       }
     }
 
@@ -125,22 +152,32 @@ export class CustomersService {
   }
 
   async getMetrics(): Promise<any> {
-    const customers = await this.customerRepository.find({ relations: { orders: true } });
+    const customers = await this.customerRepository.find({
+      relations: { orders: true },
+    });
 
     // 1. Regional Hubs
     const regions: Record<string, { count: number; totalSales: number }> = {};
     // 2. Gender distribution
     const genders: Record<string, number> = { Male: 0, Female: 0, Other: 0 };
     // 3. Purchase frequencies
-    const purchaseFreq: Record<string, number> = { '0 Orders': 0, '1-2 Orders': 0, '3-5 Orders': 0, '6+ Orders': 0 };
+    const purchaseFreq: Record<string, number> = {
+      '0 Orders': 0,
+      '1-2 Orders': 0,
+      '3-5 Orders': 0,
+      '6+ Orders': 0,
+    };
     // 4. LTV stats
     let totalLTV = 0;
     let maxLTV = 0;
 
     for (const c of customers) {
       const orderCount = c.orders ? c.orders.length : 0;
-      const ltv = c.orders 
-        ? c.orders.reduce((sum, order) => sum + parseFloat(order.totalAmount as any || 0), 0)
+      const ltv = c.orders
+        ? c.orders.reduce(
+            (sum, order) => sum + parseFloat((order.totalAmount as any) || 0),
+            0,
+          )
         : 0;
 
       totalLTV += ltv;
@@ -172,25 +209,27 @@ export class CustomersService {
       }
     }
 
-    const regionalHubs = Object.keys(regions).map(loc => ({
+    const regionalHubs = Object.keys(regions).map((loc) => ({
       location: loc,
       customerCount: regions[loc].count,
       totalSales: Math.round(regions[loc].totalSales * 100) / 100,
     }));
 
-    const genderDistribution = Object.keys(genders).map(g => ({
+    const genderDistribution = Object.keys(genders).map((g) => ({
       gender: g,
       count: genders[g],
     }));
 
-    const purchaseFrequency = Object.keys(purchaseFreq).map(f => ({
+    const purchaseFrequency = Object.keys(purchaseFreq).map((f) => ({
       frequency: f,
       count: purchaseFreq[f],
     }));
 
     return {
       totalCustomers: customers.length,
-      averageLTV: customers.length ? Math.round((totalLTV / customers.length) * 100) / 100 : 0,
+      averageLTV: customers.length
+        ? Math.round((totalLTV / customers.length) * 100) / 100
+        : 0,
       maxLTV: Math.round(maxLTV * 100) / 100,
       regionalHubs,
       genderDistribution,
@@ -199,8 +238,16 @@ export class CustomersService {
   }
 
   generateCSV(customers: any[]): string {
-    const headers = ['Name', 'Contact', 'Gender', 'Location', 'Order Count', 'Lifetime Value (Rs.)', 'Created At'];
-    const rows = customers.map(c => [
+    const headers = [
+      'Name',
+      'Contact',
+      'Gender',
+      'Location',
+      'Order Count',
+      'Lifetime Value (Rs.)',
+      'Created At',
+    ];
+    const rows = customers.map((c) => [
       `"${c.name.replace(/"/g, '""')}"`,
       `"${c.contact}"`,
       c.gender,
@@ -210,6 +257,6 @@ export class CustomersService {
       c.createdAt.toISOString(),
     ]);
 
-    return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
   }
 }

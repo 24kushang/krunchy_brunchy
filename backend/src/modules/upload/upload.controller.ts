@@ -1,4 +1,10 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
 import { diskStorage } from 'multer';
@@ -20,7 +26,8 @@ export class UploadController {
       storage: diskStorage({
         destination: './temp-uploads',
         filename: (req: any, file: any, callback: any) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = extname(file.originalname);
           callback(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
         },
@@ -32,7 +39,9 @@ export class UploadController {
   )
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file uploaded or file parameter name must be "file"');
+      throw new BadRequestException(
+        'No file uploaded or file parameter name must be "file"',
+      );
     }
 
     try {

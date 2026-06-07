@@ -13,17 +13,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  postgres-db-prod:
-    image: postgres:15-alpine
-    container_name: oms_postgres_prod
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: development_password
-      POSTGRES_DB: oms_db
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
+  # postgres-db-prod:
+  #   image: postgres:15-alpine
+  #   container_name: oms_postgres_prod
+  #   environment:
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: development_password
+  #     POSTGRES_DB: oms_db
+  #   ports:
+  #     - "5433:5432"
+  #   volumes:
+  #     - postgres_prod_data:/var/lib/postgresql/data
 
   backend-api:
     build:
@@ -63,4 +63,4 @@ services:
 
 volumes:
   postgres_data:
-  postgres_prod_data:
+  # postgres_prod_data:

@@ -10,8 +10,13 @@ import { SocialMediaContent } from '../entities/social-media-content.entity';
 import { OrderSource } from '../entities/order-source.entity';
 import { InventoryLocation } from '../entities/inventory-location.entity';
 import { ItemInventory } from '../entities/item-inventory.entity';
-import { Gender, OrderStatus, WhatsappLogStatus, PaymentStatus, PaymentMode } from '../entities/enums';
-
+import {
+  Gender,
+  OrderStatus,
+  WhatsappLogStatus,
+  PaymentStatus,
+  PaymentMode,
+} from '../entities/enums';
 
 async function seed() {
   console.log('Initializing database connection...');
@@ -37,16 +42,113 @@ async function seed() {
   // 1. Seed Items (Snacks)
   console.log('Seeding items...');
   const itemsData = [
-    { name: 'Masala Potato Chips', ingredients: ['Potato', 'Palm Oil', 'Salt', 'Spices', 'Mango Powder'], bestBeforeDays: 60, imageUrl: 'https://images.unsplash.com/photo-1566478989037-eec170784d22?w=500' },
-    { name: 'Crispy Sacha Samosas', ingredients: ['Refined Wheat Flour', 'Potato', 'Green Peas', 'Spices', 'Refined Oil'], bestBeforeDays: 5, imageUrl: 'https://images.unsplash.com/photo-1601050690597-df056fb4ce78?w=500' },
-    { name: 'Sweet Butter Cookies', ingredients: ['Wheat Flour', 'Butter', 'Sugar', 'Milk Solids', 'Vanilla Extract'], bestBeforeDays: 90, imageUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500' },
-    { name: 'Chatpata Sev Murmura', ingredients: ['Puffed Rice', 'Chickpea Flour Sev', 'Peanuts', 'Turmeric', 'Salt', 'Lemon Powder'], bestBeforeDays: 45, imageUrl: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500' },
-    { name: 'Creamy Cheese Balls', ingredients: ['Corn Meal', 'Cheese Powder', 'Vegetable Oil', 'Whey Powder', 'Spices'], bestBeforeDays: 60, imageUrl: 'https://images.unsplash.com/photo-1599490659213-e2b9527b0876?w=500' },
-    { name: 'Spicy Banana Wafers', ingredients: ['Raw Banana', 'Coconut Oil', 'Black Pepper', 'Rock Salt'], bestBeforeDays: 30, imageUrl: 'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=500' },
-    { name: 'Methi Khakhra Crunch', ingredients: ['Whole Wheat Flour', 'Fenugreek Leaves', 'Spices', 'Salt', 'Edible Oil'], bestBeforeDays: 120, imageUrl: 'https://images.unsplash.com/photo-1613769049987-b31b641f25b1?w=500' },
-    { name: 'Chilli Garlic Nachos', ingredients: ['Corn Flour', 'Garlic Powder', 'Chilli Flakes', 'Onion Powder', 'Refined Oil'], bestBeforeDays: 90, imageUrl: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=500' },
-    { name: 'Roasted Salted Cashews', ingredients: ['Cashews', 'Butter', 'Salt'], bestBeforeDays: 180, imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500' },
-    { name: 'Choco Almond Bites', ingredients: ['Dark Chocolate', 'Almond', 'Sugar', 'Cocoa Butter'], bestBeforeDays: 120, imageUrl: 'https://images.unsplash.com/photo-1518047601542-79f18c655718?w=500' },
+    {
+      name: 'Masala Potato Chips',
+      ingredients: ['Potato', 'Palm Oil', 'Salt', 'Spices', 'Mango Powder'],
+      bestBeforeDays: 60,
+      imageUrl:
+        'https://images.unsplash.com/photo-1566478989037-eec170784d22?w=500',
+    },
+    {
+      name: 'Crispy Sacha Samosas',
+      ingredients: [
+        'Refined Wheat Flour',
+        'Potato',
+        'Green Peas',
+        'Spices',
+        'Refined Oil',
+      ],
+      bestBeforeDays: 5,
+      imageUrl:
+        'https://images.unsplash.com/photo-1601050690597-df056fb4ce78?w=500',
+    },
+    {
+      name: 'Sweet Butter Cookies',
+      ingredients: [
+        'Wheat Flour',
+        'Butter',
+        'Sugar',
+        'Milk Solids',
+        'Vanilla Extract',
+      ],
+      bestBeforeDays: 90,
+      imageUrl:
+        'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500',
+    },
+    {
+      name: 'Chatpata Sev Murmura',
+      ingredients: [
+        'Puffed Rice',
+        'Chickpea Flour Sev',
+        'Peanuts',
+        'Turmeric',
+        'Salt',
+        'Lemon Powder',
+      ],
+      bestBeforeDays: 45,
+      imageUrl:
+        'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500',
+    },
+    {
+      name: 'Creamy Cheese Balls',
+      ingredients: [
+        'Corn Meal',
+        'Cheese Powder',
+        'Vegetable Oil',
+        'Whey Powder',
+        'Spices',
+      ],
+      bestBeforeDays: 60,
+      imageUrl:
+        'https://images.unsplash.com/photo-1599490659213-e2b9527b0876?w=500',
+    },
+    {
+      name: 'Spicy Banana Wafers',
+      ingredients: ['Raw Banana', 'Coconut Oil', 'Black Pepper', 'Rock Salt'],
+      bestBeforeDays: 30,
+      imageUrl:
+        'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=500',
+    },
+    {
+      name: 'Methi Khakhra Crunch',
+      ingredients: [
+        'Whole Wheat Flour',
+        'Fenugreek Leaves',
+        'Spices',
+        'Salt',
+        'Edible Oil',
+      ],
+      bestBeforeDays: 120,
+      imageUrl:
+        'https://images.unsplash.com/photo-1613769049987-b31b641f25b1?w=500',
+    },
+    {
+      name: 'Chilli Garlic Nachos',
+      ingredients: [
+        'Corn Flour',
+        'Garlic Powder',
+        'Chilli Flakes',
+        'Onion Powder',
+        'Refined Oil',
+      ],
+      bestBeforeDays: 90,
+      imageUrl:
+        'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=500',
+    },
+    {
+      name: 'Roasted Salted Cashews',
+      ingredients: ['Cashews', 'Butter', 'Salt'],
+      bestBeforeDays: 180,
+      imageUrl:
+        'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=500',
+    },
+    {
+      name: 'Choco Almond Bites',
+      ingredients: ['Dark Chocolate', 'Almond', 'Sugar', 'Cocoa Butter'],
+      bestBeforeDays: 120,
+      imageUrl:
+        'https://images.unsplash.com/photo-1518047601542-79f18c655718?w=500',
+    },
   ];
 
   const items: Item[] = [];
@@ -71,14 +173,17 @@ async function seed() {
     // 1 month ago price
     const histPrice2 = new ItemPriceHistory();
     histPrice2.item = savedItem;
-    histPrice2.price = Math.round((histPrice1.price * (1 + (Math.random() * 0.15 - 0.05))) * 100) / 100; // +- 15% change
+    histPrice2.price =
+      Math.round(histPrice1.price * (1 + (Math.random() * 0.15 - 0.05)) * 100) /
+      100; // +- 15% change
     histPrice2.changedAt = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     await AppDataSource.manager.save(histPrice2);
 
     // Current price
     const histPrice3 = new ItemPriceHistory();
     histPrice3.item = savedItem;
-    histPrice3.price = Math.round((histPrice2.price * (1 + (Math.random() * 0.10))) * 100) / 100; // price increase
+    histPrice3.price =
+      Math.round(histPrice2.price * (1 + Math.random() * 0.1) * 100) / 100; // price increase
     histPrice3.changedAt = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
     await AppDataSource.manager.save(histPrice3);
 
@@ -99,11 +204,17 @@ async function seed() {
   console.log('Seeding inventory locations...');
   const hubWest = new InventoryLocation();
   hubWest.name = 'Hub West';
-  const savedHubWest = await AppDataSource.manager.save(InventoryLocation, hubWest);
+  const savedHubWest = await AppDataSource.manager.save(
+    InventoryLocation,
+    hubWest,
+  );
 
   const hubSouth = new InventoryLocation();
   hubSouth.name = 'Hub South';
-  const savedHubSouth = await AppDataSource.manager.save(InventoryLocation, hubSouth);
+  const savedHubSouth = await AppDataSource.manager.save(
+    InventoryLocation,
+    hubSouth,
+  );
 
   const hubs = [savedHubWest, savedHubSouth];
 
@@ -142,7 +253,7 @@ async function seed() {
     { name: 'Avani Sen', gender: Gender.FEMALE },
     { name: 'Rohan Shah', gender: Gender.MALE },
     { name: 'Kriti Bansal', gender: Gender.FEMALE },
-    { name: 'Aanya Trivedi', gender: Gender.FEMALE }
+    { name: 'Aanya Trivedi', gender: Gender.FEMALE },
   ];
 
   const customers: Customer[] = [];
@@ -153,7 +264,7 @@ async function seed() {
     customer.gender = c.gender;
     customer.location = locations[index % locations.length];
     customer.contact = `+91 ${9876543200 + index}`;
-    customer.address = `${index + 101}, Snacker's Lane, Sector ${index % 5 + 1}, ${customer.location}`;
+    customer.address = `${index + 101}, Snacker's Lane, Sector ${(index % 5) + 1}, ${customer.location}`;
     const savedCustomer = await AppDataSource.manager.save(customer);
     customers.push(savedCustomer);
     index++;
@@ -170,13 +281,16 @@ async function seed() {
   ];
 
   // Helper to find the price of an item at a specific date
-  const getPriceAtDate = async (itemId: string, date: Date): Promise<number> => {
+  const getPriceAtDate = async (
+    itemId: string,
+    date: Date,
+  ): Promise<number> => {
     const history = await AppDataSource.manager.find(ItemPriceHistory, {
       where: { item: { id: itemId } },
-      order: { changedAt: 'ASC' }
+      order: { changedAt: 'ASC' },
     });
 
-    let activePrice = 50.00; // fallback default
+    let activePrice = 50.0; // fallback default
     for (const h of history) {
       if (h.changedAt.getTime() <= date.getTime()) {
         activePrice = h.price;
@@ -190,20 +304,25 @@ async function seed() {
   for (let i = 0; i < numOrders; i++) {
     const customer = customers[i % customers.length];
     // Spread orders across the last 90 days
-    const orderDate = new Date(now.getTime() - (Math.random() * 90 * 24 * 60 * 60 * 1000));
-    
+    const orderDate = new Date(
+      now.getTime() - Math.random() * 90 * 24 * 60 * 60 * 1000,
+    );
+
     // Choose status based on date (older orders are more likely to be Delivered / Cancelled)
     let status = OrderStatus.DELIVERED;
-    const daysAgo = (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24);
+    const daysAgo =
+      (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24);
     if (daysAgo < 5) {
       // Recent orders can be in any state
       status = orderStates[Math.floor(Math.random() * 5)];
     } else if (daysAgo < 15) {
       // Semi-recent orders
-      status = Math.random() > 0.15 ? OrderStatus.DELIVERED : OrderStatus.CANCELLED;
+      status =
+        Math.random() > 0.15 ? OrderStatus.DELIVERED : OrderStatus.CANCELLED;
     } else {
       // Old orders are Delivered or Cancelled
-      status = Math.random() > 0.08 ? OrderStatus.DELIVERED : OrderStatus.CANCELLED;
+      status =
+        Math.random() > 0.08 ? OrderStatus.DELIVERED : OrderStatus.CANCELLED;
     }
 
     const order = new Order();
@@ -213,30 +332,42 @@ async function seed() {
     order.createdAt = orderDate;
     order.updatedAt = orderDate;
     order.totalAmount = 0; // Will compute from items
-    
+
     // Assign Order Source
     const sources = ['WhatsApp', 'Phone', 'Instagram', 'Website', 'Walk-in'];
     order.source = orderSourcesMap[sources[i % sources.length]];
 
     // Assign Fulfillment Hub based on location (Mumbai, Pune, Ahmedabad -> Hub West, others -> Hub South)
     const westLocations = ['Mumbai', 'Pune', 'Ahmedabad'];
-    const assignedHub = westLocations.includes(customer.location) ? savedHubWest : savedHubSouth;
+    const assignedHub = westLocations.includes(customer.location)
+      ? savedHubWest
+      : savedHubSouth;
     order.fulfillmentHub = assignedHub;
-    
+
     // Assign Expected Delivery Date (optional - set on 85% of orders)
     if (Math.random() < 0.85) {
-      order.expectedDeliveryDate = new Date(orderDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+      order.expectedDeliveryDate = new Date(
+        orderDate.getTime() + 2 * 24 * 60 * 60 * 1000,
+      );
     }
     order.deliveryLocation = `${customer.location} Delivery Point #${(i % 3) + 1}`;
 
     // Set Payment details
     if (status === OrderStatus.DELIVERED) {
       order.paymentStatus = PaymentStatus.PAID;
-      const modes = [PaymentMode.UPI, PaymentMode.CARD, PaymentMode.CASH, PaymentMode.NET_BANKING];
+      const modes = [
+        PaymentMode.UPI,
+        PaymentMode.CARD,
+        PaymentMode.CASH,
+        PaymentMode.NET_BANKING,
+      ];
       order.paymentMode = modes[i % modes.length];
-      order.paymentUpdatedAt = new Date(orderDate.getTime() + 24 * 60 * 60 * 1000); // 1 day after order
+      order.paymentUpdatedAt = new Date(
+        orderDate.getTime() + 24 * 60 * 60 * 1000,
+      ); // 1 day after order
       if (order.paymentMode === PaymentMode.CASH) {
-        order.cashCollectionDetails = i % 2 === 0 ? 'Counter Register A' : 'Delivery Rider - Suresh';
+        order.cashCollectionDetails =
+          i % 2 === 0 ? 'Counter Register A' : 'Delivery Rider - Suresh';
       }
     } else {
       order.paymentStatus = PaymentStatus.UNPAID;
@@ -244,7 +375,9 @@ async function seed() {
       if (Math.random() < 0.1) {
         order.paymentStatus = PaymentStatus.PAID;
         order.paymentMode = PaymentMode.UPI;
-        order.paymentUpdatedAt = new Date(orderDate.getTime() + 2 * 60 * 60 * 1000); // 2 hours after order
+        order.paymentUpdatedAt = new Date(
+          orderDate.getTime() + 2 * 60 * 60 * 1000,
+        ); // 2 hours after order
       }
     }
 
@@ -252,7 +385,9 @@ async function seed() {
 
     // Add 1 to 3 items
     const numItemsInOrder = 1 + Math.floor(Math.random() * 3);
-    const chosenItems = [...items].sort(() => 0.5 - Math.random()).slice(0, numItemsInOrder);
+    const chosenItems = [...items]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, numItemsInOrder);
     let totalAmount = 0;
     const orderItems: OrderItem[] = [];
 
@@ -279,10 +414,17 @@ async function seed() {
       const hist = new OrderStatusHistory();
       hist.order = savedOrder;
       hist.status = hstStatus;
-      hist.changedAt = new Date(orderDate.getTime() + hoursDelay * 60 * 60 * 1000);
-      hist.changedBy = hstStatus === OrderStatus.PREPARING ? 'Kitchen Staff' : 
-                      hstStatus === OrderStatus.READY_TO_DELIVER ? 'Fulfillment Manager' :
-                      hstStatus === OrderStatus.DELIVERED ? 'Delivery Agent' : 'Admin';
+      hist.changedAt = new Date(
+        orderDate.getTime() + hoursDelay * 60 * 60 * 1000,
+      );
+      hist.changedBy =
+        hstStatus === OrderStatus.PREPARING
+          ? 'Kitchen Staff'
+          : hstStatus === OrderStatus.READY_TO_DELIVER
+            ? 'Fulfillment Manager'
+            : hstStatus === OrderStatus.DELIVERED
+              ? 'Delivery Agent'
+              : 'Admin';
       await AppDataSource.manager.save(hist);
 
       if (hstStatus === OrderStatus.PENDING) {
@@ -292,7 +434,10 @@ async function seed() {
         log.recipientName = customer.name;
         log.recipientContact = customer.contact;
         log.triggeringEvent = 'Order Created (Pending)';
-        log.status = Math.random() > 0.05 ? WhatsappLogStatus.DELIVERED : WhatsappLogStatus.FAILED;
+        log.status =
+          Math.random() > 0.05
+            ? WhatsappLogStatus.DELIVERED
+            : WhatsappLogStatus.FAILED;
         if (log.status === WhatsappLogStatus.FAILED) {
           log.errorMessage = 'Network Timeout / Meta API Drop';
         }
@@ -305,7 +450,10 @@ async function seed() {
         log.recipientName = customer.name;
         log.recipientContact = customer.contact;
         log.triggeringEvent = 'Ready to Deliver';
-        log.status = Math.random() > 0.05 ? WhatsappLogStatus.DELIVERED : WhatsappLogStatus.FAILED;
+        log.status =
+          Math.random() > 0.05
+            ? WhatsappLogStatus.DELIVERED
+            : WhatsappLogStatus.FAILED;
         if (log.status === WhatsappLogStatus.FAILED) {
           log.errorMessage = 'Invalid Contact Format / Carrier Rejection';
         }
@@ -363,36 +511,64 @@ async function seed() {
   const socialItems = [
     {
       title: 'Summer Snacking Launch',
-      caption: 'Beat the heat with our new Spicy Banana Wafers! Hand-crafted with authentic coconut oil and seasoned with rock salt and pepper. Grab yours today!',
+      caption:
+        'Beat the heat with our new Spicy Banana Wafers! Hand-crafted with authentic coconut oil and seasoned with rock salt and pepper. Grab yours today!',
       scheduledAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      mediaUrl: 'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=500',
+      mediaUrl:
+        'https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?w=500',
       platforms: ['Instagram', 'Facebook'],
-      checklist: { 'Graphic Design': true, 'Caption Drafted': true, 'Approval': true, 'Published': true }
+      checklist: {
+        'Graphic Design': true,
+        'Caption Drafted': true,
+        Approval: true,
+        Published: true,
+      },
     },
     {
       title: 'Monsoon Chai & Samosa Combo Promo',
-      caption: 'Rainy evenings are incomplete without hot chai and our Crispy Sacha Samosas! Order a pack of 5 now and get 20% off.',
+      caption:
+        'Rainy evenings are incomplete without hot chai and our Crispy Sacha Samosas! Order a pack of 5 now and get 20% off.',
       scheduledAt: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000), // In 2 days
-      mediaUrl: 'https://images.unsplash.com/photo-1601050690597-df056fb4ce78?w=500',
+      mediaUrl:
+        'https://images.unsplash.com/photo-1601050690597-df056fb4ce78?w=500',
       platforms: ['Instagram', 'LinkedIn', 'Facebook'],
-      checklist: { 'Graphic Design': true, 'Caption Drafted': true, 'Approval': false, 'Published': false }
+      checklist: {
+        'Graphic Design': true,
+        'Caption Drafted': true,
+        Approval: false,
+        Published: false,
+      },
     },
     {
       title: 'Butter Cookies Snack Box Feature',
-      caption: 'Rich, crumbly, and filled with pure butter goodness. Our Sweet Butter Cookies make the perfect gifting box for friends and family.',
+      caption:
+        'Rich, crumbly, and filled with pure butter goodness. Our Sweet Butter Cookies make the perfect gifting box for friends and family.',
       scheduledAt: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000), // In 10 days
-      mediaUrl: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500',
+      mediaUrl:
+        'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500',
       platforms: ['Instagram'],
-      checklist: { 'Graphic Design': false, 'Caption Drafted': true, 'Approval': false, 'Published': false }
+      checklist: {
+        'Graphic Design': false,
+        'Caption Drafted': true,
+        Approval: false,
+        Published: false,
+      },
     },
     {
       title: 'Homegrown Indian Snacks Spotlight',
-      caption: 'Every crunch of Krunchy Brunchy Sev Murmura carries the authentic flavors of India. 100% homegrown, 100% munchy!',
+      caption:
+        'Every crunch of Krunchy Brunchy Sev Murmura carries the authentic flavors of India. 100% homegrown, 100% munchy!',
       scheduledAt: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000), // 20 days ago
-      mediaUrl: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500',
+      mediaUrl:
+        'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=500',
       platforms: ['Facebook', 'Instagram'],
-      checklist: { 'Graphic Design': true, 'Caption Drafted': true, 'Approval': true, 'Published': true }
-    }
+      checklist: {
+        'Graphic Design': true,
+        'Caption Drafted': true,
+        Approval: true,
+        Published: true,
+      },
+    },
   ];
 
   for (const s of socialItems) {

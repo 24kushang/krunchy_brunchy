@@ -29,3 +29,8 @@ export enum PaymentMode {
   CARD = 'Card',
   NET_BANKING = 'Net Banking',
 }
+
+export enum UserRole {
+  SUPER_ADMIN = 'SuperAdmin',
+  ADMIN = 'Admin',
+}

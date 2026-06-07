@@ -12,7 +12,13 @@ import { CustomersModule } from '../customers/customers.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, OrderStatusHistory, Customer, Item]),
+    TypeOrmModule.forFeature([
+      Order,
+      OrderItem,
+      OrderStatusHistory,
+      Customer,
+      Item,
+    ]),
     WhatsappModule,
     CustomersModule,
   ],

@@ -1,14 +1,22 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+} from 'typeorm';
 import { Order } from './order.entity';
 import { WhatsappLogStatus } from './enums';
-
 
 @Entity('whatsapp_logs')
 export class WhatsappLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Order, (order) => order.whatsappLogs, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Order, (order) => order.whatsappLogs, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   order: Order;
 
   @Column({ type: 'varchar', length: 150 })
@@ -25,7 +33,6 @@ export class WhatsappLog {
 
   @Column({ type: 'text', nullable: true })
   errorMessage: string | null;
-
 
   @CreateDateColumn()
   timestamp: Date;

@@ -1,6 +1,19 @@
-import { Controller, Get, Post, Patch, Param, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+} from '@nestjs/common';
 import { OrdersService } from './orders.service';
-import { OrderStatus, Gender, PaymentStatus, PaymentMode } from '../../database/entities/enums';
+import {
+  OrderStatus,
+  Gender,
+  PaymentStatus,
+  PaymentMode,
+} from '../../database/entities/enums';
 
 @Controller('api/orders')
 export class OrdersController {
@@ -46,7 +59,8 @@ export class OrdersController {
 
   @Post()
   async create(
-    @Body() body: {
+    @Body()
+    body: {
       customerContact: string;
       customerName?: string;
       customerGender?: Gender;
@@ -80,7 +94,12 @@ export class OrdersController {
   @Patch(':id/payment')
   async updatePayment(
     @Param('id') id: string,
-    @Body() body: { paymentStatus: PaymentStatus; paymentMode?: PaymentMode; cashDetails?: string },
+    @Body()
+    body: {
+      paymentStatus: PaymentStatus;
+      paymentMode?: PaymentMode;
+      cashDetails?: string;
+    },
   ) {
     return this.ordersService.updatePayment(
       id,
