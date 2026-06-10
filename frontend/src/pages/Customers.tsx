@@ -200,8 +200,7 @@ export default function Customers() {
         <Button size="small" onClick={() => handleOpenEdit(params.row)}>
           Edit
         </Button>
-      ),
-    },
+      ) },
   ];
 
   // Recharts styling
@@ -210,7 +209,7 @@ export default function Customers() {
   return (
     <Box sx={{ pb: 6 }}>
       {/* 1. Marketing Dashboard Visualizations */}
-      <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="h5" sx={{ color: '#0A3BB0', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
         <MetricIcon /> Customer Demographics & Lifetime Value Insights
       </Typography>
 
@@ -227,7 +226,7 @@ export default function Customers() {
                 <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700 }}>
                   Total Brand Customer Profiles
                 </Typography>
-                <Typography variant="h3" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#FF5A09', fontWeight: 'bold' }}>
+                <Typography variant="h3" sx={{ color: '#FF5A09', fontWeight: 'bold' }}>
                   {metrics.totalCustomers}
                 </Typography>
               </CardContent>
@@ -240,7 +239,7 @@ export default function Customers() {
                 <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700 }}>
                   Average Lifetime Value (LTV)
                 </Typography>
-                <Typography variant="h3" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', fontWeight: 'bold' }}>
+                <Typography variant="h3" sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
                   Rs. {metrics.averageLTV.toFixed(2)}
                 </Typography>
               </CardContent>
@@ -253,7 +252,7 @@ export default function Customers() {
                 <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700 }}>
                   Highest Customer LTV
                 </Typography>
-                <Typography variant="h3" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#4CAF50', fontWeight: 'bold' }}>
+                <Typography variant="h3" sx={{ color: '#4CAF50', fontWeight: 'bold' }}>
                   Rs. {metrics.maxLTV.toFixed(2)}
                 </Typography>
               </CardContent>
@@ -340,7 +339,7 @@ export default function Customers() {
       <Divider sx={{ my: 4 }} />
       
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+        <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
           Customer Profiles Directory
         </Typography>
 
@@ -418,8 +417,7 @@ export default function Customers() {
           columns={columns}
           loading={loading}
           initialState={{
-            pagination: { paginationModel: { page: 0, pageSize: 10 } },
-          }}
+            pagination: { paginationModel: { page: 0, pageSize: 10 } } }}
           pageSizeOptions={[10, 20]}
           disableRowSelectionOnClick
           sx={{
@@ -428,16 +426,14 @@ export default function Customers() {
             border: `1px solid ${theme.palette.mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
             '& .MuiDataGrid-columnHeader': {
               bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
-              fontWeight: 'bold',
-            },
-          }}
+              fontWeight: 'bold' } }}
         />
       </Box>
 
       {/* Customer Create / Edit Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+          <Typography variant="h6" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Update Customer Profile' : 'Register Customer Profile'}
           </Typography>
         </DialogTitle>

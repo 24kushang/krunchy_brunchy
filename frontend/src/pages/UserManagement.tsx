@@ -173,7 +173,6 @@ const UserManagement: React.FC = () => {
         <Typography
           variant="h4"
           sx={{
-            fontFamily: 'Fredoka',
             fontWeight: 'bold',
             color: '#FF5A09', // Brand Primary Orange
           }}
@@ -185,13 +184,10 @@ const UserManagement: React.FC = () => {
           onClick={handleOpenAdd}
           sx={{
             backgroundColor: '#FF5A09',
-            fontFamily: 'Fredoka',
             textTransform: 'none',
             '&:hover': {
-              backgroundColor: '#e04f08',
-            },
-            borderRadius: 2,
-          }}
+              backgroundColor: '#e04f08' },
+            borderRadius: 2 }}
         >
           Add New User
         </Button>
@@ -212,12 +208,12 @@ const UserManagement: React.FC = () => {
           <Table>
             <TableHead sx={{ backgroundColor: '#FAF6F0' }}>
               <TableRow>
-                <TableCell sx={{ fontFamily: 'Fredoka', fontWeight: 'bold' }}>Name</TableCell>
-                <TableCell sx={{ fontFamily: 'Fredoka', fontWeight: 'bold' }}>Email</TableCell>
-                <TableCell sx={{ fontFamily: 'Fredoka', fontWeight: 'bold' }}>Role</TableCell>
-                <TableCell sx={{ fontFamily: 'Fredoka', fontWeight: 'bold' }}>Active Status</TableCell>
-                <TableCell sx={{ fontFamily: 'Fredoka', fontWeight: 'bold' }}>Created At</TableCell>
-                <TableCell align="right" sx={{ fontFamily: 'Fredoka', fontWeight: 'bold' }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Role</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Active Status</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Created At</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -231,10 +227,8 @@ const UserManagement: React.FC = () => {
                       color={u.role === 'SuperAdmin' ? 'primary' : 'default'}
                       size="small"
                       sx={{
-                        fontFamily: 'Fredoka',
                         backgroundColor: u.role === 'SuperAdmin' ? '#0A3BB0' : '#EFEAE4',
-                        color: u.role === 'SuperAdmin' ? 'white' : 'text.primary',
-                      }}
+                        color: u.role === 'SuperAdmin' ? 'white' : 'text.primary' }}
                     />
                   </TableCell>
                   <TableCell>
@@ -267,7 +261,7 @@ const UserManagement: React.FC = () => {
 
       {/* Add User Dialog */}
       <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontFamily: 'Fredoka', color: '#0A3BB0', fontWeight: 'bold' }}>
+        <DialogTitle sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
           Add New User
         </DialogTitle>
         <Box component="form" onSubmit={handleCreateUser}>
@@ -325,8 +319,7 @@ const UserManagement: React.FC = () => {
                 backgroundColor: '#FF5A09',
                 '&:hover': { backgroundColor: '#e04f08' },
                 textTransform: 'none',
-                borderRadius: 2,
-              }}
+                borderRadius: 2 }}
             >
               Create User
             </Button>
@@ -336,7 +329,7 @@ const UserManagement: React.FC = () => {
 
       {/* Edit User Dialog */}
       <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontFamily: 'Fredoka', color: '#0A3BB0', fontWeight: 'bold' }}>
+        <DialogTitle sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
           Edit User
         </DialogTitle>
         <Box component="form" onSubmit={handleUpdateUser}>
@@ -394,8 +387,7 @@ const UserManagement: React.FC = () => {
                 backgroundColor: '#FF5A09',
                 '&:hover': { backgroundColor: '#e04f08' },
                 textTransform: 'none',
-                borderRadius: 2,
-              }}
+                borderRadius: 2 }}
             >
               Save Changes
             </Button>
@@ -405,7 +397,7 @@ const UserManagement: React.FC = () => {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={openDeleteDialog} onClose={() => setOpenDeleteDialog(false)}>
-        <DialogTitle sx={{ fontFamily: 'Fredoka', color: 'error.main', fontWeight: 'bold' }}>
+        <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>
           Delete User
         </DialogTitle>
         <DialogContent>

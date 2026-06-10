@@ -108,8 +108,7 @@ export default function Items() {
         const formatted = res.data.map((h: any) => ({
           ...h,
           price: parseFloat(h.price),
-          date: new Date(h.changedAt).toLocaleDateString(),
-        }));
+          date: new Date(h.changedAt).toLocaleDateString() }));
         setPriceHistory(formatted);
         setLoadingHistory(false);
       })
@@ -156,9 +155,7 @@ export default function Items() {
     try {
       const res = await api.post('/api/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+          'Content-Type': 'multipart/form-data' } });
       setImageUrl(res.data.url);
     } catch (err) {
       console.error('File upload failed', err);
@@ -179,8 +176,7 @@ export default function Items() {
       price: Number(price),
       bestBeforeDays: Number(bestBeforeDays),
       ingredients,
-      imageUrl,
-    };
+      imageUrl };
 
     try {
       if (isEditMode && editingItemId) {
@@ -237,9 +233,7 @@ export default function Items() {
                   flexDirection: 'column',
                   position: 'relative',
                   '&:hover': {
-                    boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.05)',
-                  },
-                }}
+                    boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.05)' } }}
               >
                 {item.imageUrl ? (
                   <CardMedia
@@ -255,7 +249,7 @@ export default function Items() {
                 )}
 
                 <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                  <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', fontWeight: 700, mb: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
                     {item.name}
                   </Typography>
 
@@ -312,7 +306,7 @@ export default function Items() {
       {/* Dialog for Item Create / Update */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+          <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Update Inventory Item' : 'Introduce New Snack Item'}
           </Typography>
         </DialogTitle>

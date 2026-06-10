@@ -106,7 +106,7 @@ export default function RevenueDashboard() {
       {/* Header section */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', fontWeight: 700 }}>
+          <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 700 }}>
             Revenue Reports
           </Typography>
           <Typography variant="body2" color="textSecondary">
@@ -135,7 +135,7 @@ export default function RevenueDashboard() {
                 <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, display: 'block' }}>
                   PAID REVENUE
                 </Typography>
-                <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#4caf50', fontWeight: 'bold' }}>
+                <Typography variant="h4" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
                   Rs. {metrics.totalPaidRevenue.toFixed(2)}
                 </Typography>
               </Box>
@@ -153,7 +153,7 @@ export default function RevenueDashboard() {
                 <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, display: 'block' }}>
                   UNPAID INVOICES
                 </Typography>
-                <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#f44336', fontWeight: 'bold' }}>
+                <Typography variant="h4" sx={{ color: '#f44336', fontWeight: 'bold' }}>
                   Rs. {metrics.totalPendingRevenue.toFixed(2)}
                 </Typography>
               </Box>
@@ -171,7 +171,7 @@ export default function RevenueDashboard() {
                 <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, display: 'block' }}>
                   TOTAL CONTRACTED SALES
                 </Typography>
-                <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', fontWeight: 'bold' }}>
+                <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
                   Rs. {totalSales.toFixed(2)}
                 </Typography>
               </Box>
@@ -258,7 +258,7 @@ export default function RevenueDashboard() {
       </Grid>
 
       {/* Cash Collection Audit Log Table */}
-      <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2, px: 0.5 }}>
+      <Typography variant="h6" sx={{ color: '#0A3BB0', mb: 2, px: 0.5 }}>
         💵 Cash Reconciliation Audit Log
       </Typography>
 

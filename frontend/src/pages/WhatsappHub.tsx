@@ -168,8 +168,7 @@ export default function WhatsappHub() {
             Retry
           </Button>
         );
-      },
-    },
+      } },
   ];
 
   return (
@@ -184,8 +183,7 @@ export default function WhatsappHub() {
             borderRadius: 3,
             p: 0.5,
             minHeight: 0,
-            '& .MuiTabs-indicator': { display: 'none' },
-          }}
+            '& .MuiTabs-indicator': { display: 'none' } }}
         >
           <Tab icon={<LogsIcon sx={{ fontSize: 18 }} />} label="Live Dispatch Logs" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#0A3BB0', color: '#FFF' } }} />
           <Tab icon={<TemplatesIcon sx={{ fontSize: 18 }} />} label="Approved Templates" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#0A3BB0', color: '#FFF' } }} />
@@ -212,8 +210,7 @@ export default function WhatsappHub() {
             rows={logs}
             columns={columns}
             initialState={{
-              pagination: { paginationModel: { page: 0, pageSize: 15 } },
-            }}
+              pagination: { paginationModel: { page: 0, pageSize: 15 } } }}
             pageSizeOptions={[15, 30]}
             disableRowSelectionOnClick
             sx={{
@@ -222,9 +219,7 @@ export default function WhatsappHub() {
               border: `1px solid ${theme.palette.mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
               '& .MuiDataGrid-columnHeader': {
                 bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
-                fontWeight: 'bold',
-              },
-            }}
+                fontWeight: 'bold' } }}
           />
         </Box>
       ) : (
@@ -235,7 +230,7 @@ export default function WhatsappHub() {
               <Card sx={{ height: '100%', border: '1px solid #EFEAE4' }}>
                 <CardContent sx={{ p: 3 }}>
                   <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', fontWeight: 700 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
                       {tpl.name}
                     </Typography>
 

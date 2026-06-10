@@ -82,7 +82,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             boxShadow: '0px 4px 12px rgba(255, 90, 9, 0.25)'
           }}
         >
-          <Typography sx={{ fontFamily: '"Fredoka", sans-serif', color: '#FFF', fontWeight: 'bold', fontSize: 24, mt: -0.2 }}>
+          <Typography sx={{ color: '#FFF', fontWeight: 'bold', fontSize: 24, mt: -0.2 }}>
             K
           </Typography>
         </Box>
@@ -90,7 +90,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Typography
             variant="h6"
             sx={{
-              fontFamily: '"Fredoka", sans-serif',
               fontWeight: 700,
               color: '#FF5A09',
               lineHeight: 1.1,
@@ -102,7 +101,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Typography
             variant="caption"
             sx={{
-              fontFamily: '"Fredoka", sans-serif',
               fontWeight: 600,
               color: mode === 'light' ? '#0A3BB0' : '#4C7BF4',
               letterSpacing: 1.5,
@@ -140,17 +138,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   '&:hover': {
                     bgcolor: isActive
                       ? item.path === '/new-order' ? 'rgba(255, 90, 9, 0.12)' : 'rgba(10, 59, 176, 0.1)'
-                      : mode === 'light' ? '#F7F3EE' : '#252321',
-                  },
-                }}
+                      : mode === 'light' ? '#F7F3EE' : '#252321' } }}
               >
                 <ListItemIcon
                   sx={{
                     minWidth: 40,
                     color: isActive
                       ? item.path === '/new-order' ? '#FF5A09' : '#0A3BB0'
-                      : mode === 'light' ? '#8F8279' : '#8A8077',
-                  }}
+                      : mode === 'light' ? '#8F8279' : '#8A8077' }}
                 >
                   {item.icon}
                 </ListItemIcon>
@@ -160,9 +155,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     primary: {
                       sx: {
                         fontWeight: isActive ? 700 : 500,
-                        fontSize: '0.95rem',
-                        fontFamily: isActive ? '"Fredoka", sans-serif' : 'inherit',
-                      }
+                        fontSize: '0.95rem' }
                     }
                   }}
                 />
@@ -202,10 +195,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             sx={{
               mt: 1,
               textTransform: 'none',
-              fontFamily: '"Fredoka", sans-serif',
               borderRadius: 2,
-              fontWeight: 'bold',
-            }}
+              fontWeight: 'bold' }}
           >
             Logout
           </Button>
@@ -243,10 +234,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Typography
             variant="h5"
             sx={{
-              fontFamily: '"Fredoka", sans-serif',
               fontWeight: 700,
-              color: mode === 'light' ? '#221D1A' : '#FAF6F0',
-            }}
+              color: mode === 'light' ? '#221D1A' : '#FAF6F0' }}
           >
             {menuItems.find((item) => item.path === location.pathname)?.text || 'Krunchy Brunchy Operations'}
           </Typography>
@@ -277,9 +266,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   width: 36,
                   height: 36,
                   fontSize: '0.9rem',
-                  fontWeight: 'bold',
-                  fontFamily: '"Fredoka", sans-serif'
-                }}
+                  fontWeight: 'bold' }}
               >
                 {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'KB'}
               </Avatar>
@@ -306,8 +293,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth, borderRight: 'none' },
-          }}
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth, borderRight: 'none' } }}
         >
           {drawerContent}
         </Drawer>
@@ -319,9 +305,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
-              borderRight: `1px solid ${mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
-            },
-          }}
+              borderRight: `1px solid ${mode === 'light' ? '#EFEAE4' : '#2C2A28'}` } }}
           open
         >
           {drawerContent}

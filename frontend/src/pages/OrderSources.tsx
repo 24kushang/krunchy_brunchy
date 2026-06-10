@@ -108,7 +108,7 @@ export default function OrderSources() {
   return (
     <Box sx={{ maxWidth: 600, mx: 'auto', pb: 6 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Typography variant="h5" sx={{ color: '#0A3BB0', display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <SettingsIcon /> Order Sources Configuration
         </Typography>
 
@@ -164,7 +164,7 @@ export default function OrderSources() {
                       primary={source.name}
                       slotProps={{
                         primary: {
-                          sx: { fontWeight: 700, fontSize: '1.05rem', fontFamily: '"Fredoka", sans-serif' }
+                          sx: { fontWeight: 700, fontSize: '1.05rem' }
                         }
                       }}
                     />
@@ -187,7 +187,7 @@ export default function OrderSources() {
       {/* Create / Edit Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+          <Typography variant="h6" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Edit Order Source' : 'Add Order Source'}
           </Typography>
         </DialogTitle>

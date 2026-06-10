@@ -161,8 +161,7 @@ export default function InventoryPlanner() {
       await api.patch('/api/inventories/adjust', {
         itemId: adjustItem.itemId,
         locationId: adjustHubId,
-        quantity: Number(adjustQuantity),
-      });
+        quantity: Number(adjustQuantity) });
       setOpenAdjust(false);
       fetchStockData();
     } catch (err: any) {
@@ -194,7 +193,7 @@ export default function InventoryPlanner() {
     <Box>
       {/* Top Header Section with Toggle */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 700 }}>
           Inventory Planner
         </Typography>
 
@@ -207,8 +206,7 @@ export default function InventoryPlanner() {
               borderRadius: 3,
               p: 0.5,
               minHeight: 0,
-              '& .MuiTabs-indicator': { display: 'none' },
-            }}
+              '& .MuiTabs-indicator': { display: 'none' } }}
           >
             <Tab icon={<WarehouseIcon sx={{ fontSize: 18 }} />} label="Stock Levels" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
             <Tab icon={<FormatListNumberedIcon sx={{ fontSize: 18 }} />} label="FIFO Production" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
@@ -251,7 +249,7 @@ export default function InventoryPlanner() {
               <TableBody>
                 {itemStocks.map((item) => (
                   <TableRow key={item.itemId} hover>
-                    <TableCell sx={{ fontWeight: 700, fontFamily: '"Fredoka", sans-serif', fontSize: '1.05rem' }}>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
                       {item.itemName}
                     </TableCell>
                     {hubs.map((hub) => {
@@ -303,7 +301,7 @@ export default function InventoryPlanner() {
             <Grid size={{ xs: 12, md: 4 }}>
               <Card sx={{ border: '2px solid #0A3BB0', height: '100%' }}>
                 <CardContent sx={{ p: 3 }}>
-                  <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="h6" sx={{ color: '#0A3BB0', mb: 2.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <FormatListNumberedIcon /> Production Required List
                   </Typography>
 
@@ -356,7 +354,7 @@ export default function InventoryPlanner() {
 
             {/* Right Column: Order Allocation Queue */}
             <Grid size={{ xs: 12, md: 8 }}>
-              <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2, px: 0.5 }}>
+              <Typography variant="h6" sx={{ color: '#0A3BB0', mb: 2, px: 0.5 }}>
                 Chronological Order Queue (FIFO Allocation)
               </Typography>
 
@@ -454,7 +452,7 @@ export default function InventoryPlanner() {
       {/* Adjust Stock Dialog */}
       <Dialog open={openAdjust} onClose={() => setOpenAdjust(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+          <Typography variant="h6" sx={{ color: '#0A3BB0' }}>
             Adjust Stock Level
           </Typography>
         </DialogTitle>

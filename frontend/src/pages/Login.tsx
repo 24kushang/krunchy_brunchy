@@ -68,8 +68,7 @@ const Login: React.FC = () => {
         alignItems: 'center',
         minHeight: '100vh',
         backgroundColor: '#FAF6F0', // Brand Light BG
-        px: 2,
-      }}
+        px: 2 }}
     >
       <Card
         elevation={4}
@@ -79,8 +78,7 @@ const Login: React.FC = () => {
           p: 4,
           borderRadius: 4,
           border: '1px solid #EFEAE4', // Brand Light Border
-          textAlign: 'center',
-        }}
+          textAlign: 'center' }}
       >
         {/* Brand Logo Box */}
         <Box
@@ -93,15 +91,12 @@ const Login: React.FC = () => {
             width: 48,
             height: 48,
             borderRadius: 2,
-            mb: 2,
-          }}
+            mb: 2 }}
         >
           <Typography
             sx={{
-              fontFamily: 'Fredoka',
               fontSize: '2rem',
-              fontWeight: 'bold',
-            }}
+              fontWeight: 'bold' }}
           >
             K
           </Typography>
@@ -111,23 +106,19 @@ const Login: React.FC = () => {
         <Typography
           variant="h4"
           sx={{
-            fontFamily: 'Fredoka',
             fontWeight: 'bold',
             color: '#FF5A09', // Primary Orange
-            mb: 0.5,
-          }}
+            mb: 0.5 }}
         >
           KRUNCHY
         </Typography>
         <Typography
           variant="h5"
           sx={{
-            fontFamily: 'Fredoka',
             fontWeight: 'bold',
             color: '#0A3BB0', // Primary Blue
             mb: 3,
-            letterSpacing: 1,
-          }}
+            letterSpacing: 1 }}
         >
           BRUNCHY OMS
         </Typography>
@@ -157,9 +148,7 @@ const Login: React.FC = () => {
             disabled={isSubmitting}
             sx={{
               '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-              },
-            }}
+                borderRadius: 2 } }}
           />
           <TextField
             margin="normal"
@@ -185,15 +174,12 @@ const Login: React.FC = () => {
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
-                ),
-              }
+                ) }
             }}
             sx={{
               mb: 3,
               '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-              },
-            }}
+                borderRadius: 2 } }}
           />
 
           <Button
@@ -206,13 +192,10 @@ const Login: React.FC = () => {
               borderRadius: 2,
               backgroundColor: '#FF5A09', // Primary Orange
               '&:hover': {
-                backgroundColor: '#e04f08',
-              },
+                backgroundColor: '#e04f08' },
               textTransform: 'none',
-              fontFamily: 'Fredoka',
               fontSize: '1.1rem',
-              boxShadow: 'none',
-            }}
+              boxShadow: 'none' }}
           >
             {isSubmitting ? <CircularProgress size={24} sx={{ color: 'white' }} /> : 'Sign In'}
           </Button>

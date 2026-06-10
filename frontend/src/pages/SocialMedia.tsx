@@ -72,16 +72,14 @@ export default function SocialMedia() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Record<string, boolean>>({
     Instagram: true,
     Facebook: false,
-    LinkedIn: false,
-  });
+    LinkedIn: false });
 
   // Task lists
   const [checklistTasks, setChecklistTasks] = useState<Record<string, boolean>>({
     'Graphic Design': false,
     'Caption Drafted': false,
     'Approval': false,
-    'Published': false,
-  });
+    'Published': false });
 
   const fetchPosts = () => {
     setLoading(true);
@@ -120,8 +118,7 @@ export default function SocialMedia() {
     setUploading(true);
     try {
       const res = await api.post('/api/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+        headers: { 'Content-Type': 'multipart/form-data' } });
       setMediaUrl(res.data.url);
     } catch (err) {
       console.error(err);
@@ -142,8 +139,7 @@ export default function SocialMedia() {
       'Graphic Design': false,
       'Caption Drafted': false,
       'Approval': false,
-      'Published': false,
-    });
+      'Published': false });
     setOpenDialog(true);
   };
 
@@ -182,8 +178,7 @@ export default function SocialMedia() {
       scheduledAt: new Date(scheduledAt).toISOString(),
       mediaUrl,
       platforms,
-      checklist: checklistTasks,
-    };
+      checklist: checklistTasks };
 
     try {
       if (isEditMode && selectedPost) {
@@ -275,7 +270,7 @@ export default function SocialMedia() {
             <PrevIcon />
           </IconButton>
           
-          <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', fontWeight: 700, minWidth: 180, textAlign: 'center' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, minWidth: 180, textAlign: 'center' }}>
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
           </Typography>
           
@@ -334,8 +329,7 @@ export default function SocialMedia() {
                     bgcolor: day 
                       ? isToday ? 'rgba(255, 90, 9, 0.02)' : 'theme.palette.background.paper' 
                       : theme.palette.mode === 'light' ? '#FAF6F0' : '#11100F',
-                    opacity: day ? 1 : 0.4,
-                  }}
+                    opacity: day ? 1 : 0.4 }}
                 >
                   <Typography variant="body2" sx={{ fontWeight: isToday ? 800 : 500, color: isToday ? '#FF5A09' : 'inherit' }}>
                     {day ? day.getDate() : ''}
@@ -363,9 +357,7 @@ export default function SocialMedia() {
                           gap: 0.5,
                           '&:hover': {
                             bgcolor: '#FF5A09',
-                            color: '#FFF',
-                          },
-                        }}
+                            color: '#FFF' } }}
                       >
                         <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {post.title}
@@ -397,7 +389,7 @@ export default function SocialMedia() {
         {selectedPost && (
           <Stack spacing={3}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+              <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
                 Inspect Post
               </Typography>
               <IconButton onClick={() => handleOpenEdit(selectedPost)}>
@@ -477,8 +469,7 @@ export default function SocialMedia() {
                       sx={{
                         borderRadius: 2,
                         mb: 0.5,
-                        bgcolor: checked ? 'rgba(76, 175, 80, 0.05)' : 'transparent',
-                      }}
+                        bgcolor: checked ? 'rgba(76, 175, 80, 0.05)' : 'transparent' }}
                     >
                       <IconButton size="small" color={checked ? 'success' : 'default'} sx={{ mr: 1.5 }}>
                         {checked ? <CheckedIcon /> : <UncheckedIcon />}
@@ -507,7 +498,7 @@ export default function SocialMedia() {
       {/* Dialog for Post Create / Update */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
-          <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+          <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Edit Content Schedule' : 'Schedule Content Release'}
           </Typography>
         </DialogTitle>

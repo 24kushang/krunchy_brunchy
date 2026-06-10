@@ -53,13 +53,13 @@ export const ThemeContextProvider = ({ children }: { children: ReactNode }) => {
       },
     },
     typography: {
-      fontFamily: '"Plus Jakarta Sans", sans-serif',
-      h1: { fontFamily: '"Fredoka", sans-serif', fontWeight: 600 },
-      h2: { fontFamily: '"Fredoka", sans-serif', fontWeight: 600 },
-      h3: { fontFamily: '"Fredoka", sans-serif', fontWeight: 600 },
-      h4: { fontFamily: '"Fredoka", sans-serif', fontWeight: 600 },
-      h5: { fontFamily: '"Fredoka", sans-serif', fontWeight: 600 },
-      h6: { fontFamily: '"Fredoka", sans-serif', fontWeight: 600 },
+      fontFamily: '"Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      h1: { fontWeight: 600 },
+      h2: { fontWeight: 600 },
+      h3: { fontWeight: 600 },
+      h4: { fontWeight: 600 },
+      h5: { fontWeight: 600 },
+      h6: { fontWeight: 600 },
       button: { textTransform: 'none', fontWeight: 600 },
     },
     components: {
@@ -80,8 +80,8 @@ export const ThemeContextProvider = ({ children }: { children: ReactNode }) => {
         styleOverrides: {
           root: {
             borderRadius: 16, // Rounded friendly corners
-            boxShadow: mode === 'light' 
-              ? '0px 8px 24px rgba(34, 29, 26, 0.04)' 
+            boxShadow: mode === 'light'
+              ? '0px 8px 24px rgba(34, 29, 26, 0.04)'
               : '0px 8px 24px rgba(0, 0, 0, 0.2)',
             border: mode === 'light' ? '1px solid #EFEAE4' : '1px solid #2C2A28',
           },

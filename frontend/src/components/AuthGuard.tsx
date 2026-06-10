@@ -27,7 +27,7 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children, allowedRoles }) => {
         }}
       >
         <CircularProgress sx={{ color: '#FF5A09', mb: 3 }} size={60} />
-        <Typography variant="h5" sx={{ fontFamily: 'Fredoka', color: '#0A3BB0' }}>
+        <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
           Loading Krunchy Brunchy OMS...
         </Typography>
       </Box>

@@ -43,8 +43,7 @@ const OrderStatus = {
   PREPARING: 'Preparing',
   READY_TO_DELIVER: 'Ready to Deliver',
   DELIVERED: 'Delivered',
-  CANCELLED: 'Cancelled',
-} as const;
+  CANCELLED: 'Cancelled' } as const;
 
 type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
 
@@ -126,8 +125,7 @@ export default function Orders() {
         page,
         limit,
         sortBy,
-        sortOrder,
-      };
+        sortOrder };
 
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (search) params.search = search;
@@ -203,8 +201,7 @@ export default function Orders() {
       await api.patch(`/api/orders/${paymentOrder.id}/payment`, {
         paymentStatus,
         paymentMode: paymentStatus === 'Paid' ? paymentMode : undefined,
-        cashDetails: paymentMode === 'Cash' ? cashDetails : undefined,
-      });
+        cashDetails: paymentMode === 'Cash' ? cashDetails : undefined });
       setOpenPaymentDialog(false);
       fetchOrders(true); // silent refresh
       
@@ -329,8 +326,7 @@ export default function Orders() {
         >
           Inspect
         </Button>
-      ),
-    },
+      ) },
   ];
 
   const kanbanColumns = [
@@ -377,7 +373,7 @@ export default function Orders() {
     <Box>
       {/* Top Header Section with Toggle */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 700 }}>
           Orders Dashboard
         </Typography>
         
@@ -389,8 +385,7 @@ export default function Orders() {
             borderRadius: 3,
             p: 0.5,
             minHeight: 0,
-            '& .MuiTabs-indicator': { display: 'none' },
-          }}
+            '& .MuiTabs-indicator': { display: 'none' } }}
         >
           <Tab icon={<KanbanIcon sx={{ fontSize: 18 }} />} label="Kanban" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
           <Tab icon={<LedgerIcon sx={{ fontSize: 18 }} />} label="Ledger" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
@@ -490,11 +485,10 @@ export default function Orders() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 1.5,
-                  overflow: 'hidden',
-                }}
+                  overflow: 'hidden' }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                  <Typography variant="subtitle1" sx={{ fontFamily: '"Fredoka", sans-serif', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: col.color }} />
                     {col.title}
                   </Typography>
@@ -505,8 +499,7 @@ export default function Orders() {
 
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, overflowY: 'auto', flexGrow: 1, pb: 2,
                   '&::-webkit-scrollbar': { width: '4px' },
-                  '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
-                }}>
+                  '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '4px' } }}>
                   {filteredOrders.map((order) => (
                     <Card
                       key={order.id}
@@ -523,9 +516,7 @@ export default function Orders() {
                         '&:hover': {
                           transform: 'translateY(-2px)',
                           boxShadow: '0px 6px 20px rgba(0,0,0,0.06)',
-                          border: `1px solid ${col.color}`,
-                        },
-                      }}
+                          border: `1px solid ${col.color}` } }}
                     >
                       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -564,8 +555,7 @@ export default function Orders() {
                                 borderColor: '#0A3BB0',
                                 color: '#0A3BB0',
                                 bgcolor: 'rgba(10, 59, 176, 0.04)',
-                                fontWeight: 600,
-                              }}
+                                fontWeight: 600 }}
                             />
                           )}
                         </Stack>
@@ -643,9 +633,7 @@ export default function Orders() {
               border: `1px solid ${theme.palette.mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
               '& .MuiDataGrid-columnHeader': {
                 bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
-                fontWeight: 'bold',
-              },
-            }}
+                fontWeight: 'bold' } }}
           />
         </Box>
       )}
@@ -655,7 +643,7 @@ export default function Orders() {
         {selectedOrder && (
           <>
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
-              <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0' }}>
+              <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
                 Order Details ({selectedOrder.orderNumber})
               </Typography>
               <Chip
@@ -823,7 +811,7 @@ export default function Orders() {
 
       {/* Record Order Payment Dialog */}
       <Dialog open={openPaymentDialog} onClose={() => setOpenPaymentDialog(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', borderBottom: `1px solid ${theme.palette.divider}` }}>
+        <DialogTitle sx={{ color: '#0A3BB0', borderBottom: `1px solid ${theme.palette.divider}` }}>
           Record Order Payment
         </DialogTitle>
         <DialogContent sx={{ py: 3 }}>

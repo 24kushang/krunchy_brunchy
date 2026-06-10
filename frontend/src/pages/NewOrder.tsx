@@ -285,14 +285,12 @@ export default function NewOrder() {
       items: Object.keys(cart).map((itemId) => {
         const itemReq: any = {
           itemId,
-          quantity: cart[itemId],
-        };
+          quantity: cart[itemId] };
         if (isPastOrder && itemPriceOverrides[itemId] !== undefined) {
           itemReq.priceAtOrder = itemPriceOverrides[itemId];
         }
         return itemReq;
-      }),
-    };
+      }) };
 
     if (isPastOrder) {
       payload.createdAt = pastOrderDate;
@@ -369,7 +367,7 @@ export default function NewOrder() {
         <CardContent sx={{ py: 2, px: 3, '&:last-child': { pb: 2 } }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
             <Box>
-              <Typography variant="h6" sx={{ fontFamily: '"Fredoka", sans-serif', color: isPastOrder ? '#FF5A09' : '#0A3BB0', fontWeight: 700 }}>
+              <Typography variant="h6" sx={{ color: isPastOrder ? '#FF5A09' : '#0A3BB0', fontWeight: 700 }}>
                 Order Mode: {isPastOrder ? 'Recording Historical Past Order' : 'Creating New Live Order'}
               </Typography>
               <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -402,7 +400,7 @@ export default function NewOrder() {
           {/* Customer Lookup Card */}
           <Card sx={{ mb: 3, overflow: 'visible' }}>
             <CardContent>
-              <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2 }}>
+              <Typography variant="h5" sx={{ color: '#0A3BB0', mb: 2 }}>
                 1. Customer Details
               </Typography>
 
@@ -431,8 +429,7 @@ export default function NewOrder() {
                             {loadingCustomers ? <CircularProgress color="inherit" size={20} /> : null}
                             {params.slotProps.input.endAdornment}
                           </React.Fragment>
-                        ),
-                      }
+                        ) }
                     }}
                   />
                 )}
@@ -549,7 +546,7 @@ export default function NewOrder() {
           {/* Delivery Details Card */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2 }}>
+              <Typography variant="h5" sx={{ color: '#0A3BB0', mb: 2 }}>
                 2. Delivery & Order Options
               </Typography>
               <Grid container spacing={2}>
@@ -691,7 +688,7 @@ export default function NewOrder() {
           </Card>
 
           {/* Visual Grid Selector */}
-          <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 2, px: 1 }}>
+          <Typography variant="h5" sx={{ color: '#0A3BB0', mb: 2, px: 1 }}>
             3. Choose Items
           </Typography>
 
@@ -713,11 +710,10 @@ export default function NewOrder() {
                         alignItems: 'center',
                         transition: 'border 0.2s',
                         border: qty > 0 ? '2px solid #FF5A09' : '1px solid #EFEAE4',
-                        bgcolor: qty > 0 ? 'rgba(255, 90, 9, 0.01)' : 'background.paper',
-                      }}
+                        bgcolor: qty > 0 ? 'rgba(255, 90, 9, 0.01)' : 'background.paper' }}
                     >
                       <Box>
-                        <Typography variant="subtitle1" sx={{ fontFamily: '"Fredoka", sans-serif', fontWeight: 700 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                           {item.name}
                         </Typography>
                         <Typography variant="body2" color="primary" sx={{ fontWeight: 800, mt: 0.5 }}>
@@ -732,8 +728,7 @@ export default function NewOrder() {
                           size="small"
                           sx={{
                             bgcolor: 'action.selected',
-                            '&:hover': { bgcolor: 'action.hover' },
-                          }}
+                            '&:hover': { bgcolor: 'action.hover' } }}
                         >
                           <RemoveIcon fontSize="small" />
                         </IconButton>
@@ -748,8 +743,7 @@ export default function NewOrder() {
                           sx={{
                             bgcolor: '#FF5A09',
                             color: '#FFF',
-                            '&:hover': { bgcolor: '#E04E07' },
-                          }}
+                            '&:hover': { bgcolor: '#E04E07' } }}
                         >
                           <AddIcon fontSize="small" />
                         </IconButton>
@@ -767,7 +761,7 @@ export default function NewOrder() {
           <Box sx={{ position: 'sticky', top: 90 }}>
             <Card sx={{ border: '2px solid #0A3BB0' }}>
               <CardContent sx={{ p: 3 }}>
-                <Typography variant="h5" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#0A3BB0', mb: 3 }}>
+                <Typography variant="h5" sx={{ color: '#0A3BB0', mb: 3 }}>
                   Checkout Summary
                 </Typography>
 
@@ -882,9 +876,7 @@ export default function NewOrder() {
                     fontSize: '1rem',
                     borderRadius: 4,
                     '&:hover': {
-                      bgcolor: '#08308D',
-                    },
-                  }}
+                      bgcolor: '#08308D' } }}
                 >
                   {submitting ? 'Creating Order...' : 'Complete Checkout'}
                 </Button>
@@ -914,7 +906,7 @@ export default function NewOrder() {
           }}
         >
           <SuccessIcon sx={{ color: '#4CAF50', fontSize: 72, mb: 2 }} />
-          <Typography variant="h4" sx={{ fontFamily: '"Fredoka", sans-serif', color: '#FF5A09', mb: 1 }}>
+          <Typography variant="h4" sx={{ color: '#FF5A09', mb: 1 }}>
             Order Placed!
           </Typography>
           <Typography variant="body1" sx={{ mb: 3 }}>

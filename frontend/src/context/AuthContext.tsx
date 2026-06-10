@@ -38,9 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Verify token validity with backend
           const response = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/me`, {
             headers: {
-              Authorization: `Bearer ${storedToken}`,
-            },
-          });
+              Authorization: `Bearer ${storedToken}` } });
 
           // Update user state with fresh data from server
           if (response.data) {
@@ -49,8 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email: response.data.email,
               name: response.data.name,
               role: response.data.role,
-              isActive: response.data.isActive,
-            };
+              isActive: response.data.isActive };
             setUser(freshUser);
             localStorage.setItem('auth_user', JSON.stringify(freshUser));
           }
@@ -91,8 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         isAuthenticated: !!token,
-        isLoading,
-      }}
+        isLoading }}
     >
       {children}
     </AuthContext.Provider>

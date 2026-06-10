@@ -7,12 +7,14 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private jwtService: JwtService,
     private reflector: Reflector,
+    private usersService: UsersService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -37,15 +39,32 @@ export class JwtAuthGuard implements CanActivate {
     const token = authHeader.split(' ')[1];
     try {
       const payload = await this.jwtService.verifyAsync(token);
-      // Attach user payload: { sub, email, role, name } to the request
+      
+      // Fetch user from database to verify they still exist
+      let user;
+      try {
+        user = await this.usersService.findOne(payload.sub);
+      } catch {
+        throw new UnauthorizedException('User not found or deleted');
+      }
+
+      // Check if user is still active
+      if (!user.isActive) {
+        throw new UnauthorizedException('User account is deactivated');
+      }
+
+      // Attach user payload: { id, email, role, name } to the request
       request.user = {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role,
-        name: payload.name,
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
       };
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Invalid or expired token');
     }
   }
