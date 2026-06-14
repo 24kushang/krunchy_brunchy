@@ -31,6 +31,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import CheckoutIcon from '@mui/icons-material/ShoppingCartCheckout';
 import SuccessIcon from '@mui/icons-material/CheckCircle';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import api from '../utils/api';
 import { gsap } from 'gsap';
 
@@ -104,6 +105,7 @@ export default function NewOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [createdOrderId, setCreatedOrderId] = useState('');
   const [createdOrderNumber, setCreatedOrderNumber] = useState('');
 
   const successBoxRef = useRef<HTMLDivElement>(null);
@@ -179,6 +181,9 @@ export default function NewOrder() {
             setCustomerGender(exactMatch.gender);
             setCustomerLocation(exactMatch.location);
             setCustomerAddress(exactMatch.address || '');
+            if (exactMatch.address) {
+              setDeliveryLocation(exactMatch.address);
+            }
             setIsNewCustomer(false);
           } else {
             setSelectedCustomer(null);
@@ -201,6 +206,9 @@ export default function NewOrder() {
       setCustomerGender(customer.gender);
       setCustomerLocation(customer.location);
       setCustomerAddress(customer.address || '');
+      if (customer.address) {
+        setDeliveryLocation(customer.address);
+      }
       setIsNewCustomer(false);
     } else {
       setCustomerName('');
@@ -208,6 +216,7 @@ export default function NewOrder() {
       setCustomerGender('Male');
       setCustomerLocation('');
       setCustomerAddress('');
+      setDeliveryLocation('');
       setIsNewCustomer(true);
     }
   };
@@ -255,11 +264,6 @@ export default function NewOrder() {
 
     if (!customerName.trim()) {
       setErrorMsg('Please specify Customer Name.');
-      return;
-    }
-
-    if (!deliveryLocation.trim()) {
-      setErrorMsg('Please specify Expected Location of Delivery.');
       return;
     }
 
@@ -311,6 +315,7 @@ export default function NewOrder() {
 
     try {
       const res = await api.post('/api/orders', payload);
+      setCreatedOrderId(res.data.id);
       setCreatedOrderNumber(res.data.orderNumber);
 
       // Success GSAP Animation
@@ -352,6 +357,20 @@ export default function NewOrder() {
       setErrorMsg(err.response?.data?.message || 'Checkout failed. Check inputs.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSendWhatsAppAfterCreate = async () => {
+    try {
+      const res = await api.post(`/api/orders/${createdOrderId}/whatsapp-url`);
+      if (res.data && res.data.url) {
+        window.open(res.data.url, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to generate WhatsApp URL', err);
+      alert('Failed to generate WhatsApp URL. You can send it later from the WhatsApp Hub.');
+    } finally {
+      setShowSuccess(false);
     }
   };
 
@@ -614,7 +633,6 @@ export default function NewOrder() {
                     value={deliveryLocation}
                     onChange={(e) => setDeliveryLocation(e.target.value)}
                     placeholder="Enter delivery address..."
-                    required
                   />
                 </Grid>
 
@@ -910,16 +928,34 @@ export default function NewOrder() {
             Order Placed!
           </Typography>
           <Typography variant="body1" sx={{ mb: 3 }}>
-            Order **{createdOrderNumber}** has been successfully generated. WhatsApp confirmation notification has been queued.
+            Order **{createdOrderNumber}** has been successfully generated. Click below to send the WhatsApp confirmation now, or skip to log it as pending.
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => setShowSuccess(false)}
-            sx={{ px: 4, py: 1, borderRadius: 3 }}
-          >
-            Acknowledge & Clear
-          </Button>
+          <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<WhatsAppIcon />}
+              onClick={handleSendWhatsAppAfterCreate}
+              sx={{
+                bgcolor: '#25D366',
+                '&:hover': { bgcolor: '#128C7E' },
+                px: 3,
+                py: 1,
+                borderRadius: 3,
+                fontWeight: 'bold',
+                textTransform: 'none'
+              }}
+            >
+              Send WhatsApp
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setShowSuccess(false)}
+              sx={{ px: 3, py: 1, borderRadius: 3, textTransform: 'none' }}
+            >
+              Skip
+            </Button>
+          </Stack>
         </Box>
       </Backdrop>
     </Box>

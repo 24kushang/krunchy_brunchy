@@ -16,15 +16,59 @@ export class CustomersService {
   ) {}
 
   async findAll(query: {
+    page?: number;
+    limit?: number;
     location?: string;
     gender?: string;
     search?: string;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
-  }): Promise<any[]> {
+  }): Promise<{ data: any[]; total: number }> {
+    const hasPagination = query.page !== undefined || query.limit !== undefined;
+    const page = query.page ? Number(query.page) : 1;
+    const limit = query.limit ? Number(query.limit) : 10;
+    const skip = (page - 1) * limit;
+
+    // 1. Build Count Query
+    const qbCount = this.customerRepository.createQueryBuilder('customer');
+
+    if (query.location) {
+      qbCount.andWhere('customer.location = :location', {
+        location: query.location,
+      });
+    }
+
+    if (query.gender) {
+      qbCount.andWhere('customer.gender = :gender', { gender: query.gender });
+    }
+
+    if (query.search) {
+      qbCount.andWhere(
+        '(customer.name ILIKE :search OR customer.contact ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
+    }
+
+    const total = await qbCount.getCount();
+
+    // 2. Build Data Query
     const qb = this.customerRepository
       .createQueryBuilder('customer')
-      .leftJoinAndSelect('customer.orders', 'order');
+      .leftJoin('customer.orders', 'order')
+      .select([
+        'customer.id AS id',
+        'customer.name AS name',
+        'customer.contact AS contact',
+        'customer.gender AS gender',
+        'customer.location AS location',
+        'customer.address AS address',
+        'customer.createdAt AS "createdAt"',
+        'customer.updatedAt AS "updatedAt"',
+        'COUNT(order.id)::int AS "orderCount"',
+        'COALESCE(SUM(order.totalAmount), 0)::float AS ltv',
+      ]);
 
     if (query.location) {
       qb.andWhere('customer.location = :location', {
@@ -45,49 +89,39 @@ export class CustomersService {
       );
     }
 
-    const customers = await qb.getMany();
+    qb.groupBy('customer.id')
+      .addGroupBy('customer.name')
+      .addGroupBy('customer.contact')
+      .addGroupBy('customer.gender')
+      .addGroupBy('customer.location')
+      .addGroupBy('customer.address')
+      .addGroupBy('customer.createdAt')
+      .addGroupBy('customer.updatedAt');
 
-    // Map customers with aggregates (LTV, order count)
-    const result = customers.map((c) => {
-      const orderCount = c.orders ? c.orders.length : 0;
-      const ltv = c.orders
-        ? c.orders.reduce(
-            (sum, order) => sum + parseFloat((order.totalAmount as any) || 0),
-            0,
-          )
-        : 0;
-
-      return {
-        id: c.id,
-        name: c.name,
-        contact: c.contact,
-        gender: c.gender,
-        location: c.location,
-        address: c.address,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-        orderCount,
-        ltv: Math.round(ltv * 100) / 100,
-      };
-    });
-
-    // Handle manual sort on computed fields (e.g. LTV, orderCount) or model columns
     const sortBy = query.sortBy || 'name';
     const sortOrder = query.sortOrder || 'ASC';
 
-    result.sort((a, b) => {
-      let valA = (a as any)[sortBy];
-      let valB = (b as any)[sortBy];
-      if (typeof valA === 'string') {
-        valA = valA.toLowerCase();
-        valB = valB.toLowerCase();
-      }
-      if (valA < valB) return sortOrder === 'ASC' ? -1 : 1;
-      if (valA > valB) return sortOrder === 'ASC' ? 1 : -1;
-      return 0;
-    });
+    if (sortBy === 'orderCount') {
+      qb.orderBy('"orderCount"', sortOrder);
+    } else if (sortBy === 'ltv') {
+      qb.orderBy('ltv', sortOrder);
+    } else {
+      qb.orderBy(`customer.${sortBy}`, sortOrder);
+    }
 
-    return result;
+    if (hasPagination) {
+      qb.offset(skip).limit(limit);
+    }
+
+    const data = await qb.getRawMany();
+
+    // Map LTV to rounded decimal
+    const resultData = data.map((item) => ({
+      ...item,
+      ltv: Math.round(item.ltv * 100) / 100,
+    }));
+
+    return { data: resultData, total };
   }
 
   async findOne(id: string): Promise<Customer> {

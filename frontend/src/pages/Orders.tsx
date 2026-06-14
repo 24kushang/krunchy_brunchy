@@ -36,6 +36,7 @@ import MoveRightIcon from '@mui/icons-material/ChevronRight';
 import MoveLeftIcon from '@mui/icons-material/ChevronLeft';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import api from '../utils/api';
 
 const OrderStatus = {
@@ -43,7 +44,8 @@ const OrderStatus = {
   PREPARING: 'Preparing',
   READY_TO_DELIVER: 'Ready to Deliver',
   DELIVERED: 'Delivered',
-  CANCELLED: 'Cancelled' } as const;
+  CANCELLED: 'Cancelled'
+} as const;
 
 type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
 
@@ -66,6 +68,7 @@ interface Order {
     contact: string;
     location: string;
   };
+  fulfillmentHub?: { id: string; name: string } | null;
   items: {
     id: string;
     quantity: number;
@@ -105,6 +108,12 @@ export default function Orders() {
   const [cashDetails, setCashDetails] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
 
+  // WhatsApp transition prompt states
+  const [whatsappPromptOpen, setWhatsappPromptOpen] = useState(false);
+  const [whatsappPromptOrderId, setWhatsappPromptOrderId] = useState('');
+  const [whatsappPromptOrderNumber, setWhatsappPromptOrderNumber] = useState('');
+  const [whatsappPromptStatus, setWhatsappPromptStatus] = useState<OrderStatus | ''>('');
+
   // Fetch orders (Ledger vs Kanban)
   const fetchOrders = (silent = false) => {
     if (!silent) setLoading(true);
@@ -125,7 +134,8 @@ export default function Orders() {
         page,
         limit,
         sortBy,
-        sortOrder };
+        sortOrder
+      };
 
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (search) params.search = search;
@@ -144,12 +154,12 @@ export default function Orders() {
         });
     } else {
       // Kanban: Load all active orders (unpaginated, simple filtering)
-      const params: Record<string, any> = {};
+      const params: Record<string, any> = { kanban: true };
       if (search) params.search = search;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
-      api.get('/api/orders', { params: { ...params, limit: 100 } })
+      api.get('/api/orders', { params: { ...params, limit: 200 } })
         .then((res) => {
           setOrders(res.data.data);
           setLoading(false);
@@ -173,8 +183,14 @@ export default function Orders() {
     return () => clearTimeout(delayDebounceFn);
   }, [search]);
 
-  // Update order status PATCH
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
+    // Find order number for prompt before patch/update
+    const orderObj = orders.find(o => o.id === orderId);
+    if (orderObj && orderObj.status === newStatus) {
+      return;
+    }
+    const orderNumber = orderObj ? orderObj.orderNumber : '';
+
     // Optimistic state update in local state for immediate response
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o)),
@@ -182,6 +198,15 @@ export default function Orders() {
     try {
       await api.patch(`/api/orders/${orderId}/status`, { status: newStatus });
       fetchOrders(true); // silent background reload to verify
+
+      // If transitioned to target states, show the prompt modal!
+      if (newStatus === OrderStatus.PENDING || newStatus === OrderStatus.READY_TO_DELIVER || newStatus === OrderStatus.DELIVERED) {
+        setWhatsappPromptOrderId(orderId);
+        setWhatsappPromptOrderNumber(orderNumber || 'Order');
+        setWhatsappPromptStatus(newStatus);
+        setWhatsappPromptOpen(true);
+      }
+
       if (selectedOrder && selectedOrder.id === orderId) {
         // Refresh details modal
         const res = await api.get(`/api/orders/${orderId}`);
@@ -201,10 +226,11 @@ export default function Orders() {
       await api.patch(`/api/orders/${paymentOrder.id}/payment`, {
         paymentStatus,
         paymentMode: paymentStatus === 'Paid' ? paymentMode : undefined,
-        cashDetails: paymentMode === 'Cash' ? cashDetails : undefined });
+        cashDetails: paymentMode === 'Cash' ? cashDetails : undefined
+      });
       setOpenPaymentDialog(false);
       fetchOrders(true); // silent refresh
-      
+
       // Update selected order details if open
       if (selectedOrder && selectedOrder.id === paymentOrder.id) {
         const res = await api.get(`/api/orders/${paymentOrder.id}`);
@@ -215,6 +241,18 @@ export default function Orders() {
       alert('Failed to update payment status');
     } finally {
       setPaymentSubmitting(false);
+    }
+  };
+
+  const handleSendWhatsApp = async (order: Order) => {
+    try {
+      const res = await api.post(`/api/orders/${order.id}/whatsapp-url`);
+      if (res.data && res.data.url) {
+        window.open(res.data.url, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to generate WhatsApp URL', err);
+      alert('Failed to generate WhatsApp URL. Please try again.');
     }
   };
 
@@ -326,7 +364,8 @@ export default function Orders() {
         >
           Inspect
         </Button>
-      ) },
+      )
+    },
   ];
 
   const kanbanColumns = [
@@ -344,29 +383,7 @@ export default function Orders() {
    *   (updatedAt used when available, otherwise createdAt)
    */
   const getKanbanOrders = (status: OrderStatus) => {
-    const now = Date.now();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    const oneDayMs = 1 * 24 * 60 * 60 * 1000;
-    const isTerminal = status === OrderStatus.DELIVERED || status === OrderStatus.CANCELLED;
-
-    return orders.filter((o) => {
-      if (o.status !== status) return false;
-
-      const createdMs = new Date(o.createdAt).getTime();
-      // Limit all columns to 7-day window
-      if (now - createdMs > sevenDaysMs) return false;
-
-      // For terminal states, also hide if the status was set more than 1 day ago.
-      // We use updatedAt when available, otherwise fall back to createdAt.
-      if (isTerminal) {
-        const terminalMs = o.updatedAt
-          ? new Date(o.updatedAt).getTime()
-          : createdMs;
-        if (now - terminalMs > oneDayMs) return false;
-      }
-
-      return true;
-    });
+    return orders.filter((o) => o.status === status);
   };
 
   return (
@@ -376,7 +393,7 @@ export default function Orders() {
         <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 700 }}>
           Orders Dashboard
         </Typography>
-        
+
         <Tabs
           value={activeTab}
           onChange={(_e, val) => setActiveTab(val)}
@@ -385,7 +402,8 @@ export default function Orders() {
             borderRadius: 3,
             p: 0.5,
             minHeight: 0,
-            '& .MuiTabs-indicator': { display: 'none' } }}
+            '& .MuiTabs-indicator': { display: 'none' }
+          }}
         >
           <Tab icon={<KanbanIcon sx={{ fontSize: 18 }} />} label="Kanban" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
           <Tab icon={<LedgerIcon sx={{ fontSize: 18 }} />} label="Ledger" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
@@ -467,7 +485,7 @@ export default function Orders() {
         </Stack>
       ) : activeTab === 0 ? (
         /* Kanban Board View */
-        <Box sx={{ overflowX: 'auto', display: 'flex', gap: 2.5, pb: 4, minHeight: '600px', alignItems: 'stretch' }}>
+        <Box sx={{ overflowX: 'auto', display: 'flex', gap: 2.5, pb: 2, height: 'calc(100vh - 290px)', minHeight: '450px', alignItems: 'stretch' }}>
           {kanbanColumns.map((col) => {
             const filteredOrders = getKanbanOrders(col.status);
             return (
@@ -477,7 +495,7 @@ export default function Orders() {
                 onDrop={(e) => onDrop(e, col.status)}
                 sx={{
                   flex: '0 0 300px',
-                  height: '72vh',
+                  height: '100%',
                   bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#1A1918',
                   borderRadius: 4,
                   border: `1px solid ${theme.palette.mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
@@ -485,7 +503,8 @@ export default function Orders() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 1.5,
-                  overflow: 'hidden' }}
+                  overflow: 'hidden'
+                }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -497,9 +516,11 @@ export default function Orders() {
 
                 <Divider sx={{ mb: 1 }} />
 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, overflowY: 'auto', flexGrow: 1, pb: 2,
+                <Box sx={{
+                  display: 'flex', flexDirection: 'column', gap: 1.5, overflowY: 'auto', flexGrow: 1, pb: 2,
                   '&::-webkit-scrollbar': { width: '4px' },
-                  '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '4px' } }}>
+                  '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '4px' }
+                }}>
                   {filteredOrders.map((order) => (
                     <Card
                       key={order.id}
@@ -511,56 +532,29 @@ export default function Orders() {
                       }}
                       sx={{
                         cursor: 'grab',
+                        flexShrink: 0, // Prevent cards from squeezing smaller
                         bgcolor: theme.palette.background.paper,
                         transition: 'transform 0.15s, box-shadow 0.15s',
                         '&:hover': {
                           transform: 'translateY(-2px)',
                           boxShadow: '0px 6px 20px rgba(0,0,0,0.06)',
-                          border: `1px solid ${col.color}` } }}
+                          border: `1px solid ${col.color}`
+                        }
+                      }}
                     >
-                      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
                             {order.orderNumber}
                           </Typography>
-                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                            <Chip
-                              label={order.paymentStatus === 'Paid' ? 'Paid' : 'Unpaid'}
-                              size="small"
-                              variant={order.paymentStatus === 'Paid' ? 'filled' : 'outlined'}
-                              color={order.paymentStatus === 'Paid' ? 'success' : 'error'}
-                              sx={{ fontSize: '0.65rem', height: 16, fontWeight: 700 }}
-                            />
-                            <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 800 }}>
-                              Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
-                            </Typography>
-                          </Stack>
+                          <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 800 }}>
+                            Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
+                          </Typography>
                         </Stack>
 
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5 }}>
                           {order.customer?.name}
                         </Typography>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 0.5 }}>
-                          <Typography variant="caption" color="textSecondary">
-                            📞 {order.customer?.contact}
-                          </Typography>
-                          {order.source && (
-                            <Chip
-                              label={typeof order.source === 'object' ? order.source.name : order.source}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                fontSize: '0.65rem',
-                                height: 18,
-                                borderColor: '#0A3BB0',
-                                color: '#0A3BB0',
-                                bgcolor: 'rgba(10, 59, 176, 0.04)',
-                                fontWeight: 600 }}
-                            />
-                          )}
-                        </Stack>
-
-                        <Divider sx={{ mb: 1 }} />
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="caption" color="textSecondary">
@@ -577,6 +571,7 @@ export default function Orders() {
                                   const idx = kanbanColumns.findIndex(c => c.status === col.status);
                                   handleUpdateStatus(order.id, kanbanColumns[idx - 1].status);
                                 }}
+                                sx={{ p: 0.25 }}
                               >
                                 <MoveLeftIcon fontSize="small" />
                               </IconButton>
@@ -589,6 +584,7 @@ export default function Orders() {
                                   const idx = kanbanColumns.findIndex(c => c.status === col.status);
                                   handleUpdateStatus(order.id, kanbanColumns[idx + 1].status);
                                 }}
+                                sx={{ p: 0.25 }}
                               >
                                 <MoveRightIcon fontSize="small" />
                               </IconButton>
@@ -633,7 +629,9 @@ export default function Orders() {
               border: `1px solid ${theme.palette.mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
               '& .MuiDataGrid-columnHeader': {
                 bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
-                fontWeight: 'bold' } }}
+                fontWeight: 'bold'
+              }
+            }}
           />
         </Box>
       )}
@@ -642,106 +640,34 @@ export default function Orders() {
       <Dialog open={openDetail} onClose={() => setOpenDetail(false)} maxWidth="sm" fullWidth>
         {selectedOrder && (
           <>
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}`, gap: 1.5, flexWrap: 'wrap' }}>
               <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
                 Order Details ({selectedOrder.orderNumber})
               </Typography>
-              <Chip
-                label={selectedOrder.status}
-                sx={{
-                  bgcolor: getStatusColor(selectedOrder.status)?.bg,
-                  color: getStatusColor(selectedOrder.status)?.fg,
-                  fontWeight: 'bold'
-                }}
-              />
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Chip
+                  label={selectedOrder.paymentStatus || 'Unpaid'}
+                  size="small"
+                  color={selectedOrder.paymentStatus === 'Paid' ? 'success' : 'error'}
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={selectedOrder.status}
+                  size="small"
+                  sx={{
+                    bgcolor: getStatusColor(selectedOrder.status)?.bg,
+                    color: getStatusColor(selectedOrder.status)?.fg,
+                    fontWeight: 'bold'
+                  }}
+                />
+              </Stack>
             </DialogTitle>
             <DialogContent sx={{ py: 3 }}>
-              {/* Customer Segment */}
-              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
-                Customer Information
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Name</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.name}</Typography>
-                </Grid>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Contact</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact}</Typography>
-                </Grid>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Location</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.location}</Typography>
-                </Grid>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Date Logged</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{new Date(selectedOrder.createdAt).toLocaleString()}</Typography>
-                </Grid>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Order Source</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    {typeof selectedOrder.source === 'object' ? (selectedOrder.source as any)?.name : selectedOrder.source || 'N/A'}
-                  </Typography>
-                </Grid>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Expected Delivery Date</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                    {selectedOrder.expectedDeliveryDate ? new Date(selectedOrder.expectedDeliveryDate).toLocaleDateString() : 'N/A'}
-                  </Typography>
-                </Grid>
-                <Grid size={12}>
-                  <Typography variant="caption" color="textSecondary">Expected Location of Delivery</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.deliveryLocation || 'N/A'}</Typography>
-                </Grid>
-              </Grid>
-
-              <Divider sx={{ mb: 3 }} />
-
-              {/* Payment Segment */}
-              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
-                Payment Information
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Status</Typography>
-                  <Box sx={{ mt: 0.5 }}>
-                    <Chip
-                      label={selectedOrder.paymentStatus || 'Unpaid'}
-                      size="small"
-                      color={selectedOrder.paymentStatus === 'Paid' ? 'success' : 'error'}
-                      sx={{ fontWeight: 'bold' }}
-                    />
-                  </Box>
-                </Grid>
-                {selectedOrder.paymentStatus === 'Paid' && (
-                  <>
-                    <Grid size={6}>
-                      <Typography variant="caption" color="textSecondary">Payment Mode</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.paymentMode || 'N/A'}</Typography>
-                    </Grid>
-                    {selectedOrder.paymentMode === 'Cash' && (
-                      <Grid size={12}>
-                        <Typography variant="caption" color="textSecondary">Cash Collected At</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.cashCollectionDetails || 'N/A'}</Typography>
-                      </Grid>
-                    )}
-                    <Grid size={12}>
-                      <Typography variant="caption" color="textSecondary">Payment Recorded At</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {selectedOrder.paymentUpdatedAt ? new Date(selectedOrder.paymentUpdatedAt).toLocaleString() : 'N/A'}
-                      </Typography>
-                    </Grid>
-                  </>
-                )}
-              </Grid>
-
-              <Divider sx={{ mb: 3 }} />
-
-              {/* Items Segment */}
+              {/* Items Segment - FIRST */}
               <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
                 Order Items
               </Typography>
-              <Stack spacing={1.5} sx={{ mb: 3 }}>
+              <Stack spacing={1.5} sx={{ mb: 2.5 }}>
                 {selectedOrder.items?.map((item) => (
                   <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
@@ -755,12 +681,113 @@ export default function Orders() {
                 ))}
               </Stack>
 
-              <Divider sx={{ mb: 2 }} />
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Total Amount:</Typography>
                 <Typography variant="h6" color="primary" sx={{ fontWeight: 900 }}>Rs. {parseFloat(selectedOrder.totalAmount as any).toFixed(2)}</Typography>
               </Box>
+
+              <Divider sx={{ mb: 2.5 }} />
+
+              {/* Customer Segment - MIDDLE */}
+              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Customer Information
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 2.5 }}>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Name</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.name}</Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Contact</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact}</Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="success"
+                      startIcon={<WhatsAppIcon sx={{ fontSize: '0.875rem !important' }} />}
+                      onClick={() => handleSendWhatsApp(selectedOrder)}
+                      sx={{
+                        borderColor: '#25D366',
+                        color: '#25D366',
+                        '&:hover': {
+                          borderColor: '#128C7E',
+                          bgcolor: 'rgba(37, 211, 102, 0.04)',
+                        },
+                        textTransform: 'none',
+                        py: 0.1,
+                        px: 1,
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold',
+                        borderRadius: 1.5,
+                        minWidth: 0,
+                        lineHeight: 1.2
+                      }}
+                    >
+                      Send Message
+                    </Button>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Date Logged</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{new Date(selectedOrder.createdAt).toLocaleString()}</Typography>
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ mb: 2.5 }} />
+
+              {/* Other/Additional Details Segment - BOTTOM */}
+              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Additional Details
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Location (City)</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.location || 'N/A'}</Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Order Source</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {typeof selectedOrder.source === 'object' ? (selectedOrder.source as any)?.name : selectedOrder.source || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Expected Delivery Date</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {selectedOrder.expectedDeliveryDate ? new Date(selectedOrder.expectedDeliveryDate).toLocaleDateString() : 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Fulfillment Hub</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {selectedOrder.fulfillmentHub?.name || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid size={12}>
+                  <Typography variant="caption" color="textSecondary">Expected Location of Delivery</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.deliveryLocation || 'N/A'}</Typography>
+                </Grid>
+                {selectedOrder.paymentStatus === 'Paid' && (
+                  <>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="textSecondary">Payment Mode</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.paymentMode || 'N/A'}</Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="textSecondary">Payment Recorded At</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {selectedOrder.paymentUpdatedAt ? new Date(selectedOrder.paymentUpdatedAt).toLocaleString() : 'N/A'}
+                      </Typography>
+                    </Grid>
+                    {selectedOrder.paymentMode === 'Cash' && (
+                      <Grid size={12}>
+                        <Typography variant="caption" color="textSecondary">Cash Collected At</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.cashCollectionDetails || 'N/A'}</Typography>
+                      </Grid>
+                    )}
+                  </>
+                )}
+              </Grid>
             </DialogContent>
             <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2, display: 'flex', justifyContent: 'space-between' }}>
               {/* Quick Status Modifiers */}
@@ -870,6 +897,45 @@ export default function Orders() {
             sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}
           >
             {paymentSubmitting ? 'Saving...' : 'Save Payment'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* WhatsApp Send Confirmation Dialog for transitions */}
+      <Dialog open={whatsappPromptOpen} onClose={() => setWhatsappPromptOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ color: '#0A3BB0', borderBottom: `1px solid ${theme.palette.divider}` }}>
+          Send WhatsApp Notification?
+        </DialogTitle>
+        <DialogContent sx={{ py: 3 }}>
+          <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+            Order <strong>{whatsappPromptOrderNumber}</strong> has transitioned to <strong>{whatsappPromptStatus}</strong>.
+            Would you like to send the manual WhatsApp alert now, or skip to log it as pending?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
+          <Button onClick={() => setWhatsappPromptOpen(false)} variant="outlined" sx={{ borderRadius: 3, textTransform: 'none' }}>
+            Skip
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
+                const res = await api.post(`/api/orders/${whatsappPromptOrderId}/whatsapp-url`, { status: whatsappPromptStatus });
+                if (res.data && res.data.url) {
+                  window.open(res.data.url, '_blank');
+                }
+              } catch (err) {
+                console.error('Failed to generate WhatsApp URL', err);
+                alert('Failed to generate WhatsApp URL. You can send it later from the WhatsApp Hub.');
+              } finally {
+                setWhatsappPromptOpen(false);
+              }
+            }}
+            variant="contained"
+            color="success"
+            startIcon={<WhatsAppIcon />}
+            sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#128C7E' }, borderRadius: 3, textTransform: 'none' }}
+          >
+            Send WhatsApp
           </Button>
         </DialogActions>
       </Dialog>

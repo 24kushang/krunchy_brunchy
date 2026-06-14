@@ -16,7 +16,7 @@ import { Gender } from '../../database/entities/enums';
 
 @Controller('api/customers')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) {}
+  constructor(private readonly customersService: CustomersService) { }
 
   @Get()
   async findAll(
@@ -25,14 +25,22 @@ export class CustomersController {
     @Query('search') search?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
-    return this.customersService.findAll({
+    const result = await this.customersService.findAll({
       location,
       gender,
       search,
       sortBy,
       sortOrder,
+      page,
+      limit,
     });
+    if (page === undefined && limit === undefined) {
+      return result.data;
+    }
+    return result;
   }
 
   @Get('lookup')
@@ -53,12 +61,12 @@ export class CustomersController {
     @Query('gender') gender?: string,
     @Query('search') search?: string,
   ) {
-    const data = await this.customersService.findAll({
+    const result = await this.customersService.findAll({
       location,
       gender,
       search,
     });
-    const csv = this.customersService.generateCSV(data);
+    const csv = this.customersService.generateCSV(result.data);
     res.attachment('customers_directory.csv');
     return res.status(200).send(csv);
   }

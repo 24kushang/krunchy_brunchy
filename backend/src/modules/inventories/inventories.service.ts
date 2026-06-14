@@ -11,6 +11,16 @@ import { Item } from '../../database/entities/item.entity';
 import { Order } from '../../database/entities/order.entity';
 import { OrderStatus } from '../../database/entities/enums';
 
+export interface ProbableTransit {
+  fromLocationId: string;
+  fromLocationName: string;
+  toLocationId: string;
+  toLocationName: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+}
+
 @Injectable()
 export class InventoriesService {
   constructor(
@@ -109,7 +119,6 @@ export class InventoriesService {
       where: [
         { status: OrderStatus.PENDING },
         { status: OrderStatus.PREPARING },
-        { status: OrderStatus.READY_TO_DELIVER },
       ],
       order: { createdAt: 'ASC' },
       relations: {
@@ -156,6 +165,7 @@ export class InventoriesService {
     for (const order of activeOrders) {
       const assignedHub = order.fulfillmentHub || defaultHub;
       const hubId = assignedHub?.id;
+      const probableTransits: ProbableTransit[] = [];
 
       const orderPlanningItem = {
         orderId: order.id,
@@ -166,6 +176,7 @@ export class InventoriesService {
         hubName: assignedHub?.name || 'Default Hub',
         items: [] as any[],
         allocationStatus: 'Fully Allocated',
+        probableTransits,
       };
 
       let fullyAllocatedCount = 0;
@@ -206,6 +217,24 @@ export class InventoriesService {
             };
           }
           aggregatedShortages[itemId].requiredToProduce += deficit;
+
+          // Check for possible transits from other locations
+          for (const otherLoc of locations) {
+            if (hubId && otherLoc.id !== hubId) {
+              const otherVirtual = virtualStock[otherLoc.id]?.[itemId] || 0;
+              if (otherVirtual > 0) {
+                probableTransits.push({
+                  fromLocationId: otherLoc.id,
+                  fromLocationName: otherLoc.name,
+                  toLocationId: hubId,
+                  toLocationName: assignedHub?.name || 'Default Hub',
+                  itemId,
+                  itemName,
+                  quantity: Math.min(deficit, otherVirtual),
+                });
+              }
+            }
+          }
         }
 
         if (allocated === requested) {
@@ -246,5 +275,57 @@ export class InventoriesService {
       shortages: Object.values(aggregatedShortages),
       originalStock,
     };
+  }
+
+  async executeTransit(
+    fromLocationId: string,
+    toLocationId: string,
+    itemId: string,
+    quantity: number,
+  ): Promise<void> {
+    if (quantity <= 0) {
+      throw new BadRequestException('Transit quantity must be greater than zero');
+    }
+
+    const itemObj = await this.itemRepo.findOne({ where: { id: itemId } });
+    if (!itemObj) {
+      throw new NotFoundException(`Item with ID ${itemId} not found`);
+    }
+
+    const fromLoc = await this.locationRepo.findOne({ where: { id: fromLocationId } });
+    const toLoc = await this.locationRepo.findOne({ where: { id: toLocationId } });
+    if (!fromLoc || !toLoc) {
+      throw new NotFoundException('Source or destination location not found');
+    }
+
+    // Run in transaction
+    await this.itemInventoryRepo.manager.transaction(async (manager) => {
+      const sourceInv = await manager.findOne(ItemInventory, {
+        where: { item: { id: itemId }, location: { id: fromLocationId } },
+      });
+
+      if (!sourceInv || sourceInv.quantity < quantity) {
+        throw new BadRequestException(
+          `Source location does not have enough stock. Available: ${sourceInv?.quantity || 0}`,
+        );
+      }
+
+      let destInv = await manager.findOne(ItemInventory, {
+        where: { item: { id: itemId }, location: { id: toLocationId } },
+      });
+
+      if (!destInv) {
+        destInv = new ItemInventory();
+        destInv.item = itemObj;
+        destInv.location = toLoc;
+        destInv.quantity = 0;
+      }
+
+      sourceInv.quantity -= quantity;
+      destInv.quantity += quantity;
+
+      await manager.save(ItemInventory, sourceInv);
+      await manager.save(ItemInventory, destInv);
+    });
   }
 }

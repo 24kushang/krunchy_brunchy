@@ -26,7 +26,8 @@ import {
 } from '@mui/material';
 import {
   DataGrid,
-  type GridColDef
+  type GridColDef,
+  type GridSortModel
 } from '@mui/x-data-grid';
 import ExportIcon from '@mui/icons-material/Download';
 import AddIcon from '@mui/icons-material/Add';
@@ -79,6 +80,11 @@ export default function Customers() {
   const [locationFilter, setLocationFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('ALL');
 
+  // Server-side pagination and sorting states
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
+  const [totalRows, setTotalRows] = useState(0);
+  const [sortModel, setSortModel] = useState<GridSortModel>([]);
+
   // Customer Form Dialog states
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -91,14 +97,23 @@ export default function Customers() {
 
   const fetchCustomers = () => {
     setLoading(true);
-    const params: Record<string, any> = {};
+    const params: Record<string, any> = {
+      page: paginationModel.page + 1,
+      limit: paginationModel.pageSize
+    };
     if (search) params.search = search;
     if (locationFilter && locationFilter !== 'ALL') params.location = locationFilter;
     if (genderFilter !== 'ALL') params.gender = genderFilter;
 
+    if (sortModel.length > 0) {
+      params.sortBy = sortModel[0].field;
+      params.sortOrder = (sortModel[0].sort || 'asc').toUpperCase();
+    }
+
     api.get('/api/customers', { params })
       .then((res) => {
-        setCustomers(res.data);
+        setCustomers(res.data.data || []);
+        setTotalRows(res.data.total || 0);
         setLoading(false);
       })
       .catch((err) => {
@@ -115,13 +130,23 @@ export default function Customers() {
 
   useEffect(() => {
     fetchCustomers();
+  }, [paginationModel, sortModel, locationFilter, genderFilter]);
+
+  useEffect(() => {
+    if (paginationModel.page !== 0) {
+      setPaginationModel(prev => ({ ...prev, page: 0 }));
+    }
     fetchMetrics();
   }, [locationFilter, genderFilter]);
 
   // Debounced search lookup
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      fetchCustomers();
+      if (paginationModel.page !== 0) {
+        setPaginationModel(prev => ({ ...prev, page: 0 }));
+      } else {
+        fetchCustomers();
+      }
     }, 400);
     return () => clearTimeout(delayDebounceFn);
   }, [search]);
@@ -180,17 +205,21 @@ export default function Customers() {
   };
 
   const columns: GridColDef[] = [
-    { field: 'name', headerName: 'Customer Name', width: 180, renderCell: (params) => (
-      <Typography variant="body2" sx={{ fontWeight: 700 }}>{params.value}</Typography>
-    )},
+    {
+      field: 'name', headerName: 'Customer Name', width: 180, renderCell: (params) => (
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>{params.value}</Typography>
+      )
+    },
     { field: 'contact', headerName: 'Contact Number', width: 140 },
     { field: 'gender', headerName: 'Gender', width: 100 },
     { field: 'location', headerName: 'City / Location', width: 130 },
     { field: 'address', headerName: 'Address', width: 220 },
     { field: 'orderCount', headerName: 'Orders Placed', type: 'number', width: 110 },
-    { field: 'ltv', headerName: 'Lifetime Value', type: 'number', width: 130, renderCell: (params) => (
-      <Typography variant="body2" color="primary" sx={{ fontWeight: 800 }}>Rs. {parseFloat(params.value).toFixed(2)}</Typography>
-    )},
+    {
+      field: 'ltv', headerName: 'Lifetime Value', type: 'number', width: 130, renderCell: (params) => (
+        <Typography variant="body2" color="primary" sx={{ fontWeight: 800 }}>Rs. {parseFloat(params.value).toFixed(2)}</Typography>
+      )
+    },
     {
       field: 'actions',
       headerName: 'Actions',
@@ -200,7 +229,8 @@ export default function Customers() {
         <Button size="small" onClick={() => handleOpenEdit(params.row)}>
           Edit
         </Button>
-      ) },
+      )
+    },
   ];
 
   // Recharts styling
@@ -232,7 +262,7 @@ export default function Customers() {
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid size={{ xs: 12, sm: 4 }}>
             <Card sx={{ bgcolor: 'rgba(10, 59, 176, 0.03)', border: '1px solid rgba(10, 59, 176, 0.15)', height: '100%', display: 'flex', alignItems: 'center', p: 1 }}>
               <CardContent>
@@ -245,7 +275,7 @@ export default function Customers() {
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid size={{ xs: 12, sm: 4 }}>
             <Card sx={{ bgcolor: 'rgba(76, 175, 80, 0.03)', border: '1px solid rgba(76, 175, 80, 0.15)', height: '100%', display: 'flex', alignItems: 'center', p: 1 }}>
               <CardContent>
@@ -337,7 +367,7 @@ export default function Customers() {
 
       {/* 2. Customer Ledger List */}
       <Divider sx={{ my: 4 }} />
-      
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
         <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
           Customer Profiles Directory
@@ -379,7 +409,7 @@ export default function Customers() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </Grid>
-            
+
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 label="Filter by Location / City..."
@@ -416,8 +446,12 @@ export default function Customers() {
           rows={customers}
           columns={columns}
           loading={loading}
-          initialState={{
-            pagination: { paginationModel: { page: 0, pageSize: 10 } } }}
+          paginationMode="server"
+          rowCount={totalRows}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+          sortingMode="server"
+          onSortModelChange={setSortModel}
           pageSizeOptions={[10, 20]}
           disableRowSelectionOnClick
           sx={{
@@ -426,7 +460,9 @@ export default function Customers() {
             border: `1px solid ${theme.palette.mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
             '& .MuiDataGrid-columnHeader': {
               bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
-              fontWeight: 'bold' } }}
+              fontWeight: 'bold'
+            }
+          }}
         />
       </Box>
 
@@ -446,7 +482,7 @@ export default function Customers() {
               onChange={(e) => setName(e.target.value)}
               required
             />
-            
+
             <TextField
               label="Contact Number / Identifier"
               fullWidth

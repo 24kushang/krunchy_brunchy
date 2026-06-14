@@ -29,6 +29,7 @@ export class OrdersController {
     @Query('endDate') endDate?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
+    @Query('kanban') kanban?: boolean,
   ) {
     return this.ordersService.findAll({
       page,
@@ -39,12 +40,44 @@ export class OrdersController {
       endDate,
       sortBy,
       sortOrder,
+      kanban,
     });
   }
 
   @Get('metrics/revenue')
-  async getRevenueMetrics() {
-    return this.ordersService.getRevenueMetrics();
+  async getRevenueMetrics(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('type') type?: 'daily' | 'monthly' | 'quarterly' | 'yearly',
+    @Query('paymentMode') paymentMode?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+  ) {
+    return this.ordersService.getRevenueMetrics({
+      startDate,
+      endDate,
+      type,
+      paymentMode: paymentMode && paymentMode !== 'ALL' ? paymentMode as PaymentMode : undefined,
+      paymentStatus: paymentStatus && paymentStatus !== 'ALL' ? paymentStatus as PaymentStatus : undefined,
+    });
+  }
+
+  @Get('metrics/revenue/details')
+  async getRevenueDetails(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('paymentMode') paymentMode?: PaymentMode,
+    @Query('paymentStatus') paymentStatus?: PaymentStatus,
+  ) {
+    return this.ordersService.getRevenueDetails({
+      page,
+      limit,
+      startDate,
+      endDate,
+      paymentMode,
+      paymentStatus,
+    });
   }
 
   @Post('import')
@@ -107,5 +140,13 @@ export class OrdersController {
       body.paymentMode,
       body.cashDetails,
     );
+  }
+
+  @Post(':id/whatsapp-url')
+  async getWhatsappUrl(
+    @Param('id') id: string,
+    @Body() body?: { status?: OrderStatus },
+  ) {
+    return this.ordersService.getWhatsappUrl(id, body?.status);
   }
 }

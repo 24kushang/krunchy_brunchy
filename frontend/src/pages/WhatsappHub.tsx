@@ -26,6 +26,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeliveredIcon from '@mui/icons-material/CheckCircle';
 import FailedIcon from '@mui/icons-material/Error';
 import SentIcon from '@mui/icons-material/Send';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import api from '../utils/api';
 
 interface WhatsappLog {
@@ -33,7 +34,7 @@ interface WhatsappLog {
   recipientName: string;
   recipientContact: string;
   triggeringEvent: string;
-  status: 'Sent' | 'Delivered' | 'Failed';
+  status: 'Pending' | 'Sent' | 'Delivered' | 'Failed';
   errorMessage?: string;
   timestamp: string;
   order?: {
@@ -105,8 +106,31 @@ export default function WhatsappHub() {
     }
   };
 
+  const handleSendManual = async (orderId: string, triggeringEvent: string) => {
+    let status = '';
+    if (triggeringEvent === 'Order Created (Pending)') {
+      status = 'Pending';
+    } else if (triggeringEvent === 'Ready to Deliver') {
+      status = 'Ready to Deliver';
+    } else if (triggeringEvent === 'Order Delivered (Payment Confirmed)') {
+      status = 'Delivered';
+    }
+
+    try {
+      const res = await api.post(`/api/orders/${orderId}/whatsapp-url`, status ? { status } : {});
+      if (res.data && res.data.url) {
+        window.open(res.data.url, '_blank');
+      }
+      fetchLogs();
+    } catch (err) {
+      console.error('Manual send failed', err);
+      alert('Failed to generate WhatsApp URL.');
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'Pending': return <SentIcon sx={{ color: '#FF5A09', fontSize: 18 }} />;
       case 'Delivered': return <DeliveredIcon sx={{ color: '#4CAF50', fontSize: 18 }} />;
       case 'Failed': return <FailedIcon sx={{ color: '#f44336', fontSize: 18 }} />;
       case 'Sent': return <SentIcon sx={{ color: '#0A3BB0', fontSize: 18 }} />;
@@ -116,6 +140,7 @@ export default function WhatsappHub() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'Pending': return { bg: 'rgba(255, 90, 9, 0.1)', fg: '#FF5A09' };
       case 'Delivered': return { bg: 'rgba(76, 175, 80, 0.1)', fg: '#4caf50' };
       case 'Failed': return { bg: 'rgba(244, 67, 54, 0.1)', fg: '#f44336' };
       case 'Sent': return { bg: 'rgba(10, 59, 176, 0.1)', fg: '#0A3BB0' };
@@ -153,21 +178,48 @@ export default function WhatsappHub() {
       width: 110,
       sortable: false,
       renderCell: (params) => {
-        const isFailed = params.row.status === 'Failed';
-        if (!isFailed) return null;
-        return (
-          <Button
-            size="small"
-            variant="outlined"
-            color="primary"
-            startIcon={retryingId === params.row.id ? <CircularProgress size={12} /> : <RetryIcon />}
-            onClick={() => handleRetry(params.row.id)}
-            disabled={retryingId !== null}
-            sx={{ py: 0.1, px: 1, borderRadius: 2 }}
-          >
-            Retry
-          </Button>
-        );
+        const status = params.row.status;
+        if (status === 'Pending') {
+          return (
+            <Button
+              size="small"
+              variant="contained"
+              color="success"
+              startIcon={<WhatsAppIcon sx={{ fontSize: '0.875rem !important' }} />}
+              onClick={() => handleSendManual(params.row.order?.id, params.row.triggeringEvent)}
+              disabled={!params.row.order?.id}
+              sx={{
+                bgcolor: '#25D366',
+                '&:hover': { bgcolor: '#128C7E' },
+                py: 0.2,
+                px: 1.2,
+                borderRadius: 2,
+                fontSize: '0.75rem',
+                textTransform: 'none',
+                fontWeight: 'bold',
+                color: '#fff'
+              }}
+            >
+              Send
+            </Button>
+          );
+        }
+        if (status === 'Failed') {
+          return (
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              startIcon={retryingId === params.row.id ? <CircularProgress size={12} /> : <RetryIcon />}
+              onClick={() => handleRetry(params.row.id)}
+              disabled={retryingId !== null}
+              sx={{ py: 0.1, px: 1, borderRadius: 2, fontSize: '0.75rem', textTransform: 'none' }}
+            >
+              Retry
+            </Button>
+          );
+        }
+        return null;
       } },
   ];
 

@@ -23,6 +23,10 @@ export class WhatsappService {
     });
   }
 
+  async saveLog(log: WhatsappLog): Promise<WhatsappLog> {
+    return this.logRepository.save(log);
+  }
+
   async getTemplates() {
     return [
       {

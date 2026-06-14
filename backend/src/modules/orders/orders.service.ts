@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Between, Like } from 'typeorm';
+import { Repository, DataSource, Between, Like, Brackets } from 'typeorm';
 import { Order } from '../../database/entities/order.entity';
 import { OrderItem } from '../../database/entities/order-item.entity';
 import { OrderStatusHistory } from '../../database/entities/order-status-history.entity';
@@ -18,8 +18,10 @@ import {
   Gender,
   PaymentStatus,
   PaymentMode,
+  WhatsappLogStatus,
 } from '../../database/entities/enums';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { WhatsappLog } from '../../database/entities/whatsapp-log.entity';
 
 @Injectable()
 export class OrdersService {
@@ -45,6 +47,7 @@ export class OrdersService {
     endDate?: string;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
+    kanban?: boolean;
   }): Promise<{ data: Order[]; total: number }> {
     const page = query.page ? Number(query.page) : 1;
     const limit = query.limit ? Number(query.limit) : 10;
@@ -60,6 +63,40 @@ export class OrdersService {
 
     if (query.status) {
       qb.andWhere('order.status = :status', { status: query.status });
+    }
+
+    if (query.kanban === true || (query.kanban as any) === 'true') {
+      const now = new Date();
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const nowIST = new Date(now.getTime() + istOffset);
+      const startOfTodayIST = new Date(
+        nowIST.getUTCFullYear(),
+        nowIST.getUTCMonth(),
+        nowIST.getUTCDate(),
+      );
+      const startOfThreeDaysAgoIST = new Date(startOfTodayIST.getTime() - 3 * 24 * 60 * 60 * 1000);
+      const cutoffDate = new Date(startOfThreeDaysAgoIST.getTime() - istOffset);
+
+      qb.andWhere(
+        new Brackets((innerQb) => {
+          innerQb.where('order.status IN (:...activeStatuses)', {
+            activeStatuses: [
+              OrderStatus.PENDING,
+              OrderStatus.PREPARING,
+              OrderStatus.READY_TO_DELIVER,
+            ],
+          }).orWhere(
+            'order.status IN (:...terminalStatuses) AND order.updatedAt >= :cutoffDate',
+            {
+              terminalStatuses: [
+                OrderStatus.DELIVERED,
+                OrderStatus.CANCELLED,
+              ],
+              cutoffDate,
+            },
+          );
+        }),
+      );
     }
 
     if (query.search) {
@@ -349,15 +386,20 @@ export class OrdersService {
       }
       await manager.save(OrderStatusHistory, history);
 
-      // 6. Trigger WhatsApp order confirmation
-      // We pass the order fully populated
-      // const fullOrder = await manager.findOne(Order, {
-      //   where: { id: finalizedOrder.id },
-      //   relations: { customer: true },
-      // });
-      // if (fullOrder) {
-      //   await this.whatsappService.triggerNotification(fullOrder, 'Order Created (Pending)');
-      // }
+      // 6. Create a pending WhatsApp log for order creation
+      const fullOrder = await manager.findOne(Order, {
+        where: { id: finalizedOrder.id },
+        relations: { customer: true },
+      });
+      if (fullOrder) {
+        const log = new WhatsappLog();
+        log.order = fullOrder;
+        log.recipientName = fullOrder.customer.name;
+        log.recipientContact = process.env.NODE_ENV === 'production' ? fullOrder.customer.contact : (process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210');
+        log.triggeringEvent = 'Order Created (Pending)';
+        log.status = WhatsappLogStatus.PENDING;
+        await manager.save(WhatsappLog, log);
+      }
 
       return finalizedOrder;
     });
@@ -386,22 +428,20 @@ export class OrdersService {
     history.changedBy = changedBy;
     await this.statusHistoryRepository.save(history);
 
-    // Trigger WhatsApp notification hooks based on transition
-    if (newStatus === OrderStatus.PENDING) {
-      await this.whatsappService.triggerNotification(
-        updatedOrder,
-        'Order Created (Pending)',
-      );
-    } else if (newStatus === OrderStatus.READY_TO_DELIVER) {
-      await this.whatsappService.triggerNotification(
-        updatedOrder,
-        'Ready to Deliver',
-      );
-    } else if (newStatus === OrderStatus.DELIVERED) {
-      await this.whatsappService.triggerNotification(
-        updatedOrder,
-        'Order Delivered (Payment Confirmed)',
-      );
+    // Create a pending WhatsApp log for the status transition if it's one of the targeted states
+    if (newStatus === OrderStatus.PENDING || newStatus === OrderStatus.READY_TO_DELIVER || newStatus === OrderStatus.DELIVERED) {
+      let triggeringEvent = '';
+      if (newStatus === OrderStatus.PENDING) triggeringEvent = 'Order Created (Pending)';
+      else if (newStatus === OrderStatus.READY_TO_DELIVER) triggeringEvent = 'Ready to Deliver';
+      else if (newStatus === OrderStatus.DELIVERED) triggeringEvent = 'Order Delivered (Payment Confirmed)';
+
+      const log = new WhatsappLog();
+      log.order = updatedOrder;
+      log.recipientName = updatedOrder.customer.name;
+      log.recipientContact = process.env.NODE_ENV === 'production' ? updatedOrder.customer.contact : (process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210');
+      log.triggeringEvent = triggeringEvent;
+      log.status = WhatsappLogStatus.PENDING;
+      await this.whatsappService.saveLog(log);
     }
 
     return updatedOrder;
@@ -431,17 +471,161 @@ export class OrdersService {
     return this.orderRepository.save(order);
   }
 
-  // Fetch financial metrics for the revenue dashboard
-  async getRevenueMetrics() {
-    const paidOrders = await this.orderRepository.find({
-      where: { paymentStatus: PaymentStatus.PAID },
-      relations: { customer: true },
-      order: { paymentUpdatedAt: 'DESC' },
-    });
+  async getWhatsappUrl(
+    id: string,
+    status?: OrderStatus,
+  ): Promise<{ url: string }> {
+    const order = await this.findOne(id);
+    const targetStatus = status || order.status;
 
-    const unpaidOrders = await this.orderRepository.find({
-      where: { paymentStatus: PaymentStatus.UNPAID },
-    });
+    let template = '';
+    let triggeringEvent = '';
+    const customerName = order.customer.name;
+    const orderNumber = order.orderNumber;
+    const totalAmount = parseFloat(order.totalAmount as any).toFixed(2);
+
+    if (targetStatus === OrderStatus.PENDING) {
+      template = `Hi ${customerName}, thank you for ordering with Krunchy Brunchy! Your order #${orderNumber} has been successfully created. Total: Rs. ${totalAmount}.`;
+      triggeringEvent = 'Manual Send - Order Created';
+    } else if (targetStatus === OrderStatus.READY_TO_DELIVER) {
+      template = `Hi ${customerName}, your Krunchy Brunchy order #${orderNumber} has been shipped! Total Amount: Rs. ${totalAmount}.`;
+      triggeringEvent = 'Manual Send - Order Shipped';
+    } else if (targetStatus === OrderStatus.DELIVERED) {
+      template = `Hi ${customerName}, your Krunchy Brunchy order #${orderNumber} has been successfully delivered! Thank you for your purchase. Total: Rs. ${totalAmount}.`;
+      triggeringEvent = 'Manual Send - Order Delivered';
+    } else if (targetStatus === OrderStatus.PREPARING) {
+      template = `Hi ${customerName}, we have started preparing your Krunchy Brunchy order #${orderNumber}! Total: Rs. ${totalAmount}.`;
+      triggeringEvent = 'Manual Send - Order Preparing';
+    } else {
+      template = `Hi ${customerName}, updating you regarding your Krunchy Brunchy order #${orderNumber}. Total: Rs. ${totalAmount}.`;
+      triggeringEvent = `Manual Send - ${targetStatus}`;
+    }
+
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const fallbackNumber = process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
+    const isProduction = nodeEnv === 'production';
+    const rawNumber = isProduction ? order.customer.contact : fallbackNumber;
+    const cleanedNumber = rawNumber.replace(/\D/g, '');
+
+    const encodedMessage = encodeURIComponent(template);
+    const url = `https://wa.me/${cleanedNumber}?text=${encodedMessage}`;
+
+    // Check if there is an existing Pending log for this status transition
+    let pendingTriggerEvent = '';
+    if (targetStatus === OrderStatus.PENDING) pendingTriggerEvent = 'Order Created (Pending)';
+    else if (targetStatus === OrderStatus.READY_TO_DELIVER) pendingTriggerEvent = 'Ready to Deliver';
+    else if (targetStatus === OrderStatus.DELIVERED) pendingTriggerEvent = 'Order Delivered (Payment Confirmed)';
+
+    let log = null;
+    if (pendingTriggerEvent) {
+      log = await this.dataSource.getRepository(WhatsappLog).findOne({
+        where: {
+          order: { id: order.id },
+          triggeringEvent: pendingTriggerEvent,
+          status: WhatsappLogStatus.PENDING,
+        },
+      });
+    }
+
+    if (log) {
+      log.status = WhatsappLogStatus.SENT;
+      log.recipientContact = rawNumber;
+      log.timestamp = new Date();
+    } else {
+      log = new WhatsappLog();
+      log.order = order;
+      log.recipientName = order.customer.name;
+      log.recipientContact = rawNumber;
+      log.triggeringEvent = triggeringEvent;
+      log.status = WhatsappLogStatus.SENT;
+    }
+    await this.whatsappService.saveLog(log);
+
+    return { url };
+  }
+
+  // Fetch financial metrics for the revenue dashboard
+  async getRevenueMetrics(query?: {
+    startDate?: string;
+    endDate?: string;
+    type?: 'daily' | 'monthly' | 'quarterly' | 'yearly';
+    paymentMode?: PaymentMode;
+    paymentStatus?: PaymentStatus;
+  }) {
+    const now = new Date();
+    // Default to current month if dates are not provided
+    const start = query?.startDate
+      ? new Date(query.startDate)
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = query?.endDate
+      ? new Date(query.endDate)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    if (query?.endDate) {
+      end.setHours(23, 59, 59, 999);
+    }
+
+    let paidOrders: Order[] = [];
+    let unpaidOrders: Order[] = [];
+
+    // Query paid orders if paymentStatus is not Unpaid
+    if (!query?.paymentStatus || query.paymentStatus === PaymentStatus.PAID) {
+      const qbPaid = this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoin('order.customer', 'customer')
+        .select([
+          'order.id',
+          'order.orderNumber',
+          'order.totalAmount',
+          'order.paymentMode',
+          'order.cashCollectionDetails',
+          'order.paymentUpdatedAt',
+          'customer.name',
+        ])
+        .where('order.paymentStatus = :paidStatus', {
+          paidStatus: PaymentStatus.PAID,
+        })
+        .andWhere('order.paymentUpdatedAt BETWEEN :start AND :end', {
+          start,
+          end,
+        });
+
+      if (query?.paymentMode) {
+        qbPaid.andWhere('order.paymentMode = :paymentMode', {
+          paymentMode: query.paymentMode,
+        });
+      }
+
+      paidOrders = await qbPaid
+        .orderBy('order.paymentUpdatedAt', 'DESC')
+        .getMany();
+    }
+
+    // Query unpaid orders if paymentStatus is not Paid
+    if (!query?.paymentStatus || query.paymentStatus === PaymentStatus.UNPAID) {
+      const qbUnpaid = this.orderRepository
+        .createQueryBuilder('order')
+        .select([
+          'order.id',
+          'order.totalAmount',
+          'order.createdAt',
+        ])
+        .where('order.paymentStatus = :unpaidStatus', {
+          unpaidStatus: PaymentStatus.UNPAID,
+        })
+        .andWhere('order.createdAt BETWEEN :start AND :end', {
+          start,
+          end,
+        });
+
+      if (query?.paymentMode) {
+        qbUnpaid.andWhere('order.paymentMode = :paymentMode', {
+          paymentMode: query.paymentMode,
+        });
+      }
+
+      unpaidOrders = await qbUnpaid.getMany();
+    }
 
     const totalPaidRevenue = paidOrders.reduce(
       (sum, o) => sum + Number(o.totalAmount),
@@ -458,49 +642,174 @@ export class OrdersService {
       modeBreakdown[mode] = (modeBreakdown[mode] || 0) + Number(o.totalAmount);
     });
 
-    const cashLogs = paidOrders
-      // .filter((o) => o.paymentMode === PaymentMode.CASH)
-      .map((o) => ({
-        orderId: o.id,
-        orderNumber: o.orderNumber,
-        customerName: o.customer?.name || 'Walk-in',
-        amount: o.totalAmount,
-        collectedAt: o.cashCollectionDetails || 'N/A',
-        timestamp: o.paymentUpdatedAt,
-      }));
-    console.log(cashLogs);
+    const cashLogs = paidOrders.map((o) => ({
+      orderId: o.id,
+      orderNumber: o.orderNumber,
+      customerName: o.customer?.name || 'Walk-in',
+      amount: o.totalAmount,
+      collectedAt: o.cashCollectionDetails || 'N/A',
+      timestamp: o.paymentUpdatedAt,
+    }));
 
-    // Daily Timeline: last 30 days
-    const timelineData: Record<string, number> = {};
-    const now = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const dateStr = new Date(
-        now.getTime() - i * 24 * 60 * 60 * 1000,
-      ).toLocaleDateString();
-      timelineData[dateStr] = 0;
-    }
+    // Grouping timelines
+    const dailyData: Record<string, number> = {};
+    const monthlyData: Record<string, number> = {};
+    const quarterlyData: Record<string, number> = {};
+    const yearlyData: Record<string, number> = {};
 
     paidOrders.forEach((o) => {
       if (o.paymentUpdatedAt) {
-        const dateStr = new Date(o.paymentUpdatedAt).toLocaleDateString();
-        if (timelineData[dateStr] !== undefined) {
-          timelineData[dateStr] += Number(o.totalAmount);
-        }
+        const date = new Date(o.paymentUpdatedAt);
+        const amount = Number(o.totalAmount);
+
+        // Daily
+        const dateStr = date.toLocaleDateString();
+        dailyData[dateStr] = (dailyData[dateStr] || 0) + amount;
+
+        // Monthly
+        const monthStr = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        monthlyData[monthStr] = (monthlyData[monthStr] || 0) + amount;
+
+        // Quarterly
+        const quarter = Math.floor(date.getMonth() / 3) + 1;
+        const quarterStr = `${date.getFullYear()} Q${quarter}`;
+        quarterlyData[quarterStr] = (quarterlyData[quarterStr] || 0) + amount;
+
+        // Yearly
+        const yearStr = `${date.getFullYear()}`;
+        yearlyData[yearStr] = (yearlyData[yearStr] || 0) + amount;
       }
     });
 
-    const timeline = Object.keys(timelineData).map((date) => ({
-      date,
-      revenue: timelineData[date],
-    }));
+    // 1. Daily timeline (within range, up to 366 days, or last 30 days of the range)
+    const dailyTimeline: { date: string; revenue: number }[] = [];
+    if (!query?.type || query.type === 'daily') {
+      const startDay = new Date(start);
+      const endDay = new Date(end);
+      
+      const diffTime = Math.abs(endDay.getTime() - startDay.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 366) {
+        for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toLocaleDateString();
+          dailyTimeline.push({
+            date: dateStr,
+            revenue: dailyData[dateStr] || 0,
+          });
+        }
+      } else {
+        // Range too large: default to last 30 days of the range
+        const startLimit = new Date(endDay.getTime() - 29 * 24 * 60 * 60 * 1000);
+        for (let d = new Date(startLimit); d <= endDay; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toLocaleDateString();
+          dailyTimeline.push({
+            date: dateStr,
+            revenue: dailyData[dateStr] || 0,
+          });
+        }
+      }
+    }
+
+    // 2. Monthly timeline
+    const monthlyTimeline: { date: string; revenue: number }[] = [];
+    if (!query?.type || query.type === 'monthly') {
+      const list = Object.keys(monthlyData)
+        .map((key) => ({ name: key, date: new Date(key), revenue: monthlyData[key] }))
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .map((item) => ({ date: item.name, revenue: item.revenue }));
+      monthlyTimeline.push(...list);
+    }
+
+    // 3. Quarterly timeline
+    const quarterlyTimeline: { date: string; revenue: number }[] = [];
+    if (!query?.type || query.type === 'quarterly') {
+      const list = Object.keys(quarterlyData)
+        .sort()
+        .map((key) => ({ date: key, revenue: quarterlyData[key] }));
+      quarterlyTimeline.push(...list);
+    }
+
+    // 4. Yearly timeline
+    const yearlyTimeline: { date: string; revenue: number }[] = [];
+    if (!query?.type || query.type === 'yearly') {
+      const list = Object.keys(yearlyData)
+        .sort()
+        .map((key) => ({ date: key, revenue: yearlyData[key] }));
+      yearlyTimeline.push(...list);
+    }
 
     return {
       totalPaidRevenue,
       totalPendingRevenue,
       modeBreakdown,
       cashLogs,
-      timeline,
+      timeline: {
+        daily: dailyTimeline,
+        monthly: monthlyTimeline,
+        quarterly: quarterlyTimeline,
+        yearly: yearlyTimeline,
+      },
     };
+  }
+
+  // Paginated revenue report details with filters
+  async getRevenueDetails(query: {
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    paymentMode?: PaymentMode;
+    paymentStatus?: PaymentStatus;
+  }): Promise<{ data: Order[]; total: number }> {
+    const page = query.page ? Number(query.page) : 1;
+    const limit = query.limit ? Number(query.limit) : 10;
+    const skip = (page - 1) * limit;
+
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.customer', 'customer')
+      .leftJoinAndSelect('order.fulfillmentHub', 'fulfillmentHub');
+
+    if (query.paymentStatus) {
+      qb.andWhere('order.paymentStatus = :paymentStatus', {
+        paymentStatus: query.paymentStatus,
+      });
+    }
+
+    if (query.paymentMode) {
+      qb.andWhere('order.paymentMode = :paymentMode', {
+        paymentMode: query.paymentMode,
+      });
+    }
+
+    const now = new Date();
+    const start = query.startDate
+      ? new Date(query.startDate)
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = query.endDate
+      ? new Date(query.endDate)
+      : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    if (query.endDate) {
+      end.setHours(23, 59, 59, 999);
+    }
+
+    qb.andWhere(
+      '((order.paymentStatus = :paidStatus AND order.paymentUpdatedAt BETWEEN :start AND :end) OR (order.paymentStatus = :unpaidStatus AND order.createdAt BETWEEN :start AND :end))',
+      {
+        paidStatus: PaymentStatus.PAID,
+        unpaidStatus: PaymentStatus.UNPAID,
+        start,
+        end,
+      },
+    );
+
+    qb.orderBy('order.createdAt', 'DESC');
+    qb.skip(skip).take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data, total };
   }
 
   async importOrders(

@@ -57,6 +57,16 @@ interface FIFOOrderItem {
   status: 'Allocated' | 'Partially Allocated' | 'Out of Stock';
 }
 
+interface ProbableTransit {
+  fromLocationId: string;
+  fromLocationName: string;
+  toLocationId: string;
+  toLocationName: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+}
+
 interface FIFOOrder {
   orderId: string;
   orderNumber: string;
@@ -66,6 +76,7 @@ interface FIFOOrder {
   hubName: string;
   items: FIFOOrderItem[];
   allocationStatus: 'Fully Allocated' | 'Partially Allocated' | 'Unallocated';
+  probableTransits?: ProbableTransit[];
 }
 
 interface Shortage {
@@ -82,7 +93,7 @@ export default function InventoryPlanner() {
   // Tab A - Stock States
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [itemStocks, setItemStocks] = useState<ItemStock[]>([]);
-  
+
   // Tab B - FIFO Planning States
   const [fifoOrders, setFifoOrders] = useState<FIFOOrder[]>([]);
   const [shortages, setShortages] = useState<Shortage[]>([]);
@@ -120,6 +131,24 @@ export default function InventoryPlanner() {
         console.error('Failed to fetch FIFO planner data', err);
         setLoading(false);
       });
+  };
+
+  const handleExecuteTransit = async (transit: ProbableTransit) => {
+    try {
+      await api.post('/api/inventories/transit', {
+        fromLocationId: transit.fromLocationId,
+        toLocationId: transit.toLocationId,
+        itemId: transit.itemId,
+        quantity: transit.quantity
+      });
+      if (activeTab === 0) {
+        fetchStockData();
+      } else {
+        fetchFIFOPlanning();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to execute stock transit');
+    }
   };
 
   useEffect(() => {
@@ -161,7 +190,8 @@ export default function InventoryPlanner() {
       await api.patch('/api/inventories/adjust', {
         itemId: adjustItem.itemId,
         locationId: adjustHubId,
-        quantity: Number(adjustQuantity) });
+        quantity: Number(adjustQuantity)
+      });
       setOpenAdjust(false);
       fetchStockData();
     } catch (err: any) {
@@ -206,7 +236,8 @@ export default function InventoryPlanner() {
               borderRadius: 3,
               p: 0.5,
               minHeight: 0,
-              '& .MuiTabs-indicator': { display: 'none' } }}
+              '& .MuiTabs-indicator': { display: 'none' }
+            }}
           >
             <Tab icon={<WarehouseIcon sx={{ fontSize: 18 }} />} label="Stock Levels" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
             <Tab icon={<FormatListNumberedIcon sx={{ fontSize: 18 }} />} label="FIFO Production" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
@@ -380,7 +411,7 @@ export default function InventoryPlanner() {
                               {order.orderNumber} — {order.customerName}
                             </Typography>
                             <Typography variant="caption" color="textSecondary">
-                              Order Logged: {new Date(order.createdAt).toLocaleString()} | Assigned Hub: **{order.hubName}**
+                              Order Logged: {new Date(order.createdAt).toLocaleString()} | Assigned Hub: <strong>{order.hubName}</strong>
                             </Typography>
                           </Box>
                           <Chip
@@ -391,6 +422,32 @@ export default function InventoryPlanner() {
                         </Box>
 
                         <Divider sx={{ mb: 2 }} />
+
+                        {/* Probable Transit Suggestion Alert */}
+                        {order.probableTransits && order.probableTransits.length > 0 && (
+                          <Box sx={{ mb: 2, p: 2, bgcolor: theme.palette.mode === 'light' ? 'rgba(10, 59, 176, 0.05)' : 'rgba(10, 59, 176, 0.15)', borderRadius: 3, border: '1px dashed #0A3BB0' }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#0A3BB0', mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              💡 Probable transit of items can fulfill order
+                            </Typography>
+                            <Stack spacing={1}>
+                              {order.probableTransits.map((transit, idx) => (
+                                <Stack key={idx} direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                                  <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+                                    Transfer <strong>{transit.quantity}</strong> units of <strong>{transit.itemName}</strong> from <strong>{transit.fromLocationName}</strong> to fulfill stock here.
+                                  </Typography>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => handleExecuteTransit(transit)}
+                                    sx={{ py: 0.5, px: 1.5, fontSize: '0.75rem', bgcolor: '#0A3BB0', '&:hover': { bgcolor: '#08308D' }, borderRadius: 2, color: '#FFF' }}
+                                  >
+                                    Use Transit
+                                  </Button>
+                                </Stack>
+                              ))}
+                            </Stack>
+                          </Box>
+                        )}
 
                         {/* Order Items stock checks */}
                         <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, mb: 1, display: 'block' }}>
@@ -460,7 +517,7 @@ export default function InventoryPlanner() {
           {adjustItem && (
             <Stack spacing={3} sx={{ mt: 1 }}>
               <Typography variant="body2">
-                Setting new inventory counts for snack **{adjustItem.name}**.
+                Setting new inventory counts for snack <strong>{adjustItem.name}</strong>.
               </Typography>
 
               <FormControl fullWidth>

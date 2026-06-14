@@ -13,6 +13,7 @@ export enum OrderStatus {
 }
 
 export enum WhatsappLogStatus {
+  PENDING = 'Pending',
   SENT = 'Sent',
   DELIVERED = 'Delivered',
   FAILED = 'Failed',
