@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: ${DB_CONTAINER_NAME:-oms_postgres}
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-admin}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-development_password}
+      POSTGRES_DB: ${DATABASE_NAME:-oms_db}
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    restart: always
+
+volumes:
+  postgres_data:
+
+networks:
+  app_network:
+    name: ${NETWORK_NAME:-oms_network_prod}
+    external: true
