@@ -59,6 +59,9 @@ interface RevenueMetrics {
   totalPendingRevenue: number;
   modeBreakdown: Record<string, number>;
   cashLogs: CashLog[];
+  totalCost: number | null;
+  totalGrossProfit: number | null;
+  overallMarginPercent: number | null;
   timeline: {
     daily: { date: string; revenue: number }[];
     monthly: { date: string; revenue: number }[];
@@ -375,17 +378,90 @@ export default function RevenueDashboard() {
                   <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(10, 59, 176, 0.1)', color: '#0A3BB0', display: 'flex' }}>
                     <AccountBalanceWalletIcon fontSize="large" />
                   </Box>
-                  <Box>
+                  <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, display: 'block' }}>
                       TOTAL SALES VALUE
                     </Typography>
-                    <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
-                      Rs. {totalSales.toFixed(2)}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
+                        Rs. {totalSales.toFixed(2)}
+                      </Typography>
+                      {metrics.overallMarginPercent !== null && (
+                        <Chip
+                          label={`${metrics.overallMarginPercent.toFixed(1)}% margin`}
+                          size="small"
+                          color={metrics.overallMarginPercent >= 30 ? 'success' : metrics.overallMarginPercent >= 10 ? 'warning' : 'error'}
+                          variant="filled"
+                          sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                        />
+                      )}
+                    </Box>
                   </Box>
                 </CardContent>
               </Card>
             </Grid>
+
+            {/* Cost & Profit row (only if cost data available) */}
+            {metrics.totalCost !== null && (
+              <>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <Card sx={{ bgcolor: 'rgba(156, 39, 176, 0.03)', border: '1px solid rgba(156, 39, 176, 0.15)', height: '100%', display: 'flex', alignItems: 'center', p: 1 }}>
+                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                      <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(156, 39, 176, 0.1)', color: '#9c27b0', display: 'flex' }}>
+                        <PaymentsIcon fontSize="large" />
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, display: 'block' }}>
+                          TOTAL COST (WHERE KNOWN)
+                        </Typography>
+                        <Typography variant="h4" sx={{ color: '#9c27b0', fontWeight: 'bold' }}>
+                          Rs. {metrics.totalCost.toFixed(2)}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <Card
+                    sx={{
+                      bgcolor: metrics.totalGrossProfit !== null && metrics.totalGrossProfit >= 0
+                        ? 'rgba(76, 175, 80, 0.03)' : 'rgba(244, 67, 54, 0.03)',
+                      border: metrics.totalGrossProfit !== null && metrics.totalGrossProfit >= 0
+                        ? '1px solid rgba(76, 175, 80, 0.25)' : '1px solid rgba(244, 67, 54, 0.25)',
+                      height: '100%', display: 'flex', alignItems: 'center', p: 1
+                    }}
+                  >
+                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                      <Box
+                        sx={{
+                          p: 1.5, borderRadius: 3, display: 'flex',
+                          bgcolor: metrics.totalGrossProfit !== null && metrics.totalGrossProfit >= 0
+                            ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+                          color: metrics.totalGrossProfit !== null && metrics.totalGrossProfit >= 0 ? '#4caf50' : '#f44336',
+                        }}
+                      >
+                        <AccountBalanceWalletIcon fontSize="large" />
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700, display: 'block' }}>
+                          GROSS PROFIT (WHERE KNOWN)
+                        </Typography>
+                        <Typography
+                          variant="h4"
+                          sx={{
+                            fontWeight: 'bold',
+                            color: metrics.totalGrossProfit !== null && metrics.totalGrossProfit >= 0 ? '#4caf50' : '#f44336',
+                          }}
+                        >
+                          Rs. {metrics.totalGrossProfit !== null ? metrics.totalGrossProfit.toFixed(2) : '—'}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </>
+            )}
           </Grid>
 
           {/* Visual Charts section */}
@@ -443,16 +519,69 @@ export default function RevenueDashboard() {
                           }}
                         />
                         <YAxis fontSize={10} />
-                        <Tooltip formatter={(value) => [`Rs. ${parseFloat(value as any).toFixed(2)}`, 'Revenue']} />
-                        <Legend />
+                        <Tooltip
+                          content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                              const pointData = payload[0].payload;
+                              return (
+                                <Paper sx={{ p: 1.5, fontSize: '0.8rem', border: `1px solid ${theme.palette.divider}`, borderRadius: 2, boxShadow: '0px 4px 20px rgba(0,0,0,0.1)' }}>
+                                  <Typography variant="caption" sx={{ fontWeight: 800, display: 'block', mb: 0.5, color: 'text.secondary' }}>
+                                    {label}
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: '#FF5A09', fontWeight: 700 }}>
+                                    Revenue: Rs. {parseFloat(pointData.revenue || 0).toFixed(2)}
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: '#9C27B0', fontWeight: 700 }}>
+                                    Cost: Rs. {parseFloat(pointData.cost || 0).toFixed(2)}
+                                  </Typography>
+                                  <Typography variant="body2" sx={{ color: '#4CAF50', fontWeight: 700 }}>
+                                    Gross Profit: Rs. {parseFloat(pointData.profit || 0).toFixed(2)}
+                                  </Typography>
+                                  {pointData.marginPercent !== null && pointData.marginPercent !== undefined && (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        color: pointData.marginPercent >= 30 ? '#4CAF50' : pointData.marginPercent >= 10 ? '#ff9800' : '#f44336',
+                                        fontWeight: 800, display: 'block', mt: 0.5
+                                      }}
+                                    >
+                                      Margin: {pointData.marginPercent.toFixed(1)}%
+                                    </Typography>
+                                  )}
+                                </Paper>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
                         <Line
                           type="monotone"
                           dataKey="revenue"
                           stroke="#FF5A09"
-                          name="Invoiced Revenue (Rs.)"
+                          name="Revenue (Rs.)"
                           strokeWidth={3}
                           dot={{ r: 4, stroke: '#FF5A09', strokeWidth: 1, fill: '#FFF' }}
                           activeDot={{ r: 6 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="cost"
+                          stroke="#9C27B0"
+                          name="Cost (Rs.)"
+                          strokeWidth={2}
+                          strokeDasharray="5 3"
+                          dot={{ r: 3, stroke: '#9C27B0', strokeWidth: 1, fill: '#FFF' }}
+                          activeDot={{ r: 5 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="profit"
+                          stroke="#4CAF50"
+                          name="Gross Profit (Rs.)"
+                          strokeWidth={2}
+                          dot={{ r: 3, stroke: '#4CAF50', strokeWidth: 1, fill: '#FFF' }}
+                          activeDot={{ r: 5 }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -525,6 +654,9 @@ export default function RevenueDashboard() {
                   <TableCell sx={{ fontWeight: 800 }}>Payment Status</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Payment Mode</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Total Value</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Est. Cost</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Gross Profit</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Margin %</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Details</TableCell>
                 </TableRow>
               </TableHead>
@@ -563,19 +695,46 @@ export default function RevenueDashboard() {
                       {order.paymentMode || 'N/A'}
                     </TableCell>
                     <TableCell sx={{ color: '#FF5A09', fontWeight: 800 }}>
-                      Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700, fontSize: '0.8rem', color: 'text.secondary' }}>
-                      {order.paymentMode === 'Cash'
-                        ? order.cashCollectionDetails || 'N/A'
-                        : 'N/A'}
-                    </TableCell>
+                        Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.82rem' }}>
+                        {order.estimatedCost !== null && order.estimatedCost !== undefined
+                          ? `Rs. ${order.estimatedCost.toFixed(2)}`
+                          : <span style={{ color: '#9e9e9e' }}>—</span>}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                        {order.grossProfit !== null && order.grossProfit !== undefined ? (
+                          <span style={{ color: order.grossProfit >= 0 ? '#4caf50' : '#f44336' }}>
+                            Rs. {order.grossProfit.toFixed(2)}
+                          </span>
+                        ) : <span style={{ color: '#9e9e9e' }}>—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {order.marginPercent !== null && order.marginPercent !== undefined ? (
+                          <Chip
+                            label={`${order.marginPercent.toFixed(1)}%`}
+                            size="small"
+                            color={
+                              order.marginPercent >= 30 ? 'success'
+                                : order.marginPercent >= 10 ? 'warning'
+                                : 'error'
+                            }
+                            variant="filled"
+                            sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                          />
+                        ) : <span style={{ color: '#9e9e9e' }}>—</span>}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: '0.8rem', color: 'text.secondary' }}>
+                        {order.paymentMode === 'Cash'
+                          ? order.cashCollectionDetails || 'N/A'
+                          : 'N/A'}
+                      </TableCell>
                   </TableRow>
                 ))}
 
                 {revenueDetails.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                    <TableCell colSpan={11} align="center" sx={{ py: 6 }}>
                       No invoicing records found matching your active filter criteria.
                     </TableCell>
                   </TableRow>

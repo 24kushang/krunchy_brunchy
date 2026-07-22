@@ -23,6 +23,33 @@ import {
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { WhatsappLog } from '../../database/entities/whatsapp-log.entity';
 
+/**
+ * Helper: resolves active price history entry for an order date.
+ * Tries to find latest entry on or before order creation date.
+ * Fallback: if all entries are dated after order date (e.g. backdated orders or initial data timing),
+ * returns the earliest recorded price history entry.
+ */
+function findActivePriceHistoryForOrder(
+  priceHistory: ItemPriceHistory[] | undefined,
+  orderCreatedAt: Date,
+): ItemPriceHistory | undefined {
+  if (!priceHistory || priceHistory.length === 0) return undefined;
+
+  const sorted = [...priceHistory].sort(
+    (a, b) =>
+      new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime(),
+  );
+
+  const matchOnOrBefore = sorted.find(
+    (h) => new Date(h.changedAt).getTime() <= new Date(orderCreatedAt).getTime(),
+  );
+
+  if (matchOnOrBefore) return matchOnOrBefore;
+
+  // Fallback to earliest entry
+  return sorted[sorted.length - 1];
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -78,49 +105,46 @@ export class OrdersService {
       const cutoffDate = new Date(startOfThreeDaysAgoIST.getTime() - istOffset);
 
       qb.andWhere(
-        new Brackets((innerQb) => {
-          innerQb.where('order.status IN (:...activeStatuses)', {
+        new Brackets((subQb) => {
+          subQb.where('order.status IN (:...activeStatuses)', {
             activeStatuses: [
               OrderStatus.PENDING,
               OrderStatus.PREPARING,
               OrderStatus.READY_TO_DELIVER,
             ],
           }).orWhere(
-            'order.status IN (:...terminalStatuses) AND order.updatedAt >= :cutoffDate',
+            '(order.status IN (:...terminalStatuses) AND order.updatedAt >= :cutoffDate)',
             {
-              terminalStatuses: [
-                OrderStatus.DELIVERED,
-                OrderStatus.CANCELLED,
-              ],
+              terminalStatuses: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
               cutoffDate,
             },
           );
         }),
       );
+    } else {
+      if (query.startDate && query.endDate) {
+        const start = new Date(query.startDate);
+        const end = new Date(query.endDate);
+        end.setHours(23, 59, 59, 999);
+        qb.andWhere('order.createdAt BETWEEN :start AND :end', { start, end });
+      }
     }
 
     if (query.search) {
+      const searchTerm = `%${query.search}%`;
       qb.andWhere(
         '(order.orderNumber ILIKE :search OR customer.name ILIKE :search OR customer.contact ILIKE :search)',
-        { search: `%${query.search}%` },
+        { search: searchTerm },
       );
     }
 
-    if (query.startDate && query.endDate) {
-      qb.andWhere('order.createdAt BETWEEN :start AND :end', {
-        start: new Date(query.startDate),
-        end: new Date(query.endDate),
-      });
-    }
-
-    // Server-side sorting
-    const sortBy = query.sortBy || 'createdAt';
+    const sortField = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder || 'DESC';
 
-    if (sortBy === 'customerName') {
+    if (sortField === 'customerName') {
       qb.orderBy('customer.name', sortOrder);
     } else {
-      qb.orderBy(`order.${sortBy}`, sortOrder);
+      qb.orderBy(`order.${sortField}`, sortOrder);
     }
 
     qb.skip(skip).take(limit);
@@ -140,13 +164,18 @@ export class OrdersService {
           item: true,
         },
         statusHistory: true,
-        whatsappLogs: true,
+      },
+      order: {
+        statusHistory: {
+          changedAt: 'ASC',
+        },
       },
     });
 
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
+
     return order;
   }
 
@@ -343,7 +372,6 @@ export class OrdersService {
         ) {
           priceAtOrder = parseFloat(itemRequest.priceAtOrder as any);
         } else {
-          // Get latest price
           const sortedHistory = [...itemObj.priceHistory].sort(
             (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
           );
@@ -368,7 +396,6 @@ export class OrdersService {
         totalAmount += priceAtOrder * itemRequest.quantity;
       }
 
-      // Update total amount on order (use override if provided)
       if (data.totalAmount !== undefined && !isNaN(Number(data.totalAmount))) {
         savedOrder.totalAmount = parseFloat(data.totalAmount as any);
       } else {
@@ -376,7 +403,6 @@ export class OrdersService {
       }
       const finalizedOrder = await manager.save(Order, savedOrder);
 
-      // 5. Add initial Status History log
       const history = new OrderStatusHistory();
       history.order = finalizedOrder;
       history.status = finalizedOrder.status;
@@ -386,7 +412,6 @@ export class OrdersService {
       }
       await manager.save(OrderStatusHistory, history);
 
-      // 6. Create a pending WhatsApp log for order creation
       const fullOrder = await manager.findOne(Order, {
         where: { id: finalizedOrder.id },
         relations: { customer: true },
@@ -395,7 +420,10 @@ export class OrdersService {
         const log = new WhatsappLog();
         log.order = fullOrder;
         log.recipientName = fullOrder.customer.name;
-        log.recipientContact = process.env.NODE_ENV === 'production' ? fullOrder.customer.contact : (process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210');
+        log.recipientContact =
+          process.env.NODE_ENV === 'production'
+            ? fullOrder.customer.contact
+            : process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
         log.triggeringEvent = 'Order Created (Pending)';
         log.status = WhatsappLogStatus.PENDING;
         await manager.save(WhatsappLog, log);
@@ -405,49 +433,40 @@ export class OrdersService {
     });
   }
 
-  // Update order status with transition logs and WhatsApp triggers
   async updateStatus(
     id: string,
     newStatus: OrderStatus,
-    changedBy = 'Admin',
+    changedBy: string = 'Admin',
   ): Promise<Order> {
     const order = await this.findOne(id);
-    const oldStatus = order.status;
-
-    if (oldStatus === newStatus) {
-      return order;
-    }
-
     order.status = newStatus;
-    const updatedOrder = await this.orderRepository.save(order);
+    await this.orderRepository.save(order);
 
-    // Save status history record
-    const history = new OrderStatusHistory();
-    history.order = updatedOrder;
-    history.status = newStatus;
-    history.changedBy = changedBy;
+    const history = this.statusHistoryRepository.create({
+      order,
+      status: newStatus,
+      changedBy,
+    });
     await this.statusHistoryRepository.save(history);
 
-    // Create a pending WhatsApp log for the status transition if it's one of the targeted states
-    if (newStatus === OrderStatus.PENDING || newStatus === OrderStatus.READY_TO_DELIVER || newStatus === OrderStatus.DELIVERED) {
-      let triggeringEvent = '';
-      if (newStatus === OrderStatus.PENDING) triggeringEvent = 'Order Created (Pending)';
-      else if (newStatus === OrderStatus.READY_TO_DELIVER) triggeringEvent = 'Ready to Deliver';
-      else if (newStatus === OrderStatus.DELIVERED) triggeringEvent = 'Order Delivered (Payment Confirmed)';
-
-      const log = new WhatsappLog();
-      log.order = updatedOrder;
-      log.recipientName = updatedOrder.customer.name;
-      log.recipientContact = process.env.NODE_ENV === 'production' ? updatedOrder.customer.contact : (process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210');
-      log.triggeringEvent = triggeringEvent;
-      log.status = WhatsappLogStatus.PENDING;
-      await this.whatsappService.saveLog(log);
+    if (
+      [
+        OrderStatus.PENDING,
+        OrderStatus.READY_TO_DELIVER,
+        OrderStatus.DELIVERED,
+      ].includes(newStatus)
+    ) {
+      const eventMap: Record<string, string> = {
+        [OrderStatus.PENDING]: 'Order Created (Pending)',
+        [OrderStatus.READY_TO_DELIVER]: 'Order Ready to Deliver',
+        [OrderStatus.DELIVERED]: 'Order Delivered',
+      };
+      await this.whatsappService.triggerNotification(order, eventMap[newStatus]);
     }
 
-    return updatedOrder;
+    return this.findOne(id);
   }
 
-  // Update order payment status and mode
   async updatePayment(
     id: string,
     paymentStatus: PaymentStatus,
@@ -510,7 +529,6 @@ export class OrdersService {
     const encodedMessage = encodeURIComponent(template);
     const url = `https://wa.me/${cleanedNumber}?text=${encodedMessage}`;
 
-    // Check if there is an existing Pending log for this status transition
     let pendingTriggerEvent = '';
     if (targetStatus === OrderStatus.PENDING) pendingTriggerEvent = 'Order Created (Pending)';
     else if (targetStatus === OrderStatus.READY_TO_DELIVER) pendingTriggerEvent = 'Ready to Deliver';
@@ -544,7 +562,6 @@ export class OrdersService {
     return { url };
   }
 
-  // Fetch financial metrics for the revenue dashboard
   async getRevenueMetrics(query?: {
     startDate?: string;
     endDate?: string;
@@ -553,7 +570,6 @@ export class OrdersService {
     paymentStatus?: PaymentStatus;
   }) {
     const now = new Date();
-    // Default to current month if dates are not provided
     const start = query?.startDate
       ? new Date(query.startDate)
       : new Date(now.getFullYear(), now.getMonth(), 1);
@@ -580,15 +596,16 @@ export class OrdersService {
           'order.paymentMode',
           'order.cashCollectionDetails',
           'order.paymentUpdatedAt',
+          'order.createdAt',
           'customer.name',
         ])
         .where('order.paymentStatus = :paidStatus', {
           paidStatus: PaymentStatus.PAID,
         })
-        .andWhere('order.paymentUpdatedAt BETWEEN :start AND :end', {
-          start,
-          end,
-        });
+        .andWhere(
+          'COALESCE(order.paymentUpdatedAt, order.createdAt) BETWEEN :start AND :end',
+          { start, end },
+        );
 
       if (query?.paymentMode) {
         qbPaid.andWhere('order.paymentMode = :paymentMode', {
@@ -597,7 +614,7 @@ export class OrdersService {
       }
 
       paidOrders = await qbPaid
-        .orderBy('order.paymentUpdatedAt', 'DESC')
+        .orderBy('COALESCE(order.paymentUpdatedAt, order.createdAt)', 'DESC')
         .getMany();
     }
 
@@ -648,94 +665,165 @@ export class OrdersService {
       customerName: o.customer?.name || 'Walk-in',
       amount: o.totalAmount,
       collectedAt: o.cashCollectionDetails || 'N/A',
-      timestamp: o.paymentUpdatedAt,
+      timestamp: o.paymentUpdatedAt || o.createdAt,
     }));
 
-    // Grouping timelines
-    const dailyData: Record<string, number> = {};
-    const monthlyData: Record<string, number> = {};
-    const quarterlyData: Record<string, number> = {};
-    const yearlyData: Record<string, number> = {};
+    // ── Pre-calculate per-order cost ──────────────────────────────────────────
+    const paidOrderIds = paidOrders.map((o) => o.id);
+    const orderCostMap = new Map<string, number>();
+    let totalCost: number | null = null;
+    let overallCostSum = 0;
+    let hasAnyCost = false;
+
+    if (paidOrderIds.length > 0) {
+      const ordersWithItems = await this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.items', 'orderItem')
+        .leftJoinAndSelect('orderItem.item', 'item')
+        .leftJoinAndSelect('item.priceHistory', 'priceHistory')
+        .where('order.id IN (:...ids)', { ids: paidOrderIds })
+        .getMany();
+
+      for (const order of ordersWithItems) {
+        let orderCost = 0;
+        let orderHasCost = false;
+        for (const oi of order.items ?? []) {
+          const activeAtOrder = findActivePriceHistoryForOrder(
+            oi.item?.priceHistory,
+            order.createdAt,
+          );
+          if (
+            activeAtOrder?.costPrice !== null &&
+            activeAtOrder?.costPrice !== undefined
+          ) {
+            hasAnyCost = true;
+            orderHasCost = true;
+            orderCost +=
+              parseFloat(activeAtOrder.costPrice as any) * oi.quantity;
+          }
+        }
+        if (orderHasCost) {
+          orderCostMap.set(order.id, orderCost);
+          overallCostSum += orderCost;
+        }
+      }
+
+      if (hasAnyCost) totalCost = parseFloat(overallCostSum.toFixed(2));
+    }
+
+    const totalGrossProfit =
+      totalCost !== null
+        ? parseFloat((totalPaidRevenue - totalCost).toFixed(2))
+        : null;
+    const overallMarginPercent =
+      totalCost !== null && totalPaidRevenue > 0
+        ? parseFloat(
+            (((totalPaidRevenue - totalCost) / totalPaidRevenue) * 100).toFixed(2),
+          )
+        : null;
+
+    // Grouping timelines (Revenue & Cost)
+    const dailyData: Record<string, { revenue: number; cost: number }> = {};
+    const monthlyData: Record<string, { revenue: number; cost: number }> = {};
+    const quarterlyData: Record<string, { revenue: number; cost: number }> = {};
+    const yearlyData: Record<string, { revenue: number; cost: number }> = {};
 
     paidOrders.forEach((o) => {
-      if (o.paymentUpdatedAt) {
-        const date = new Date(o.paymentUpdatedAt);
+      const logDate = o.paymentUpdatedAt || o.createdAt;
+      if (logDate) {
+        const date = new Date(logDate);
         const amount = Number(o.totalAmount);
+        const cost = orderCostMap.get(o.id) || 0;
 
-        // Daily
         const dateStr = date.toLocaleDateString();
-        dailyData[dateStr] = (dailyData[dateStr] || 0) + amount;
+        if (!dailyData[dateStr]) dailyData[dateStr] = { revenue: 0, cost: 0 };
+        dailyData[dateStr].revenue += amount;
+        dailyData[dateStr].cost += cost;
 
-        // Monthly
         const monthStr = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-        monthlyData[monthStr] = (monthlyData[monthStr] || 0) + amount;
+        if (!monthlyData[monthStr]) monthlyData[monthStr] = { revenue: 0, cost: 0 };
+        monthlyData[monthStr].revenue += amount;
+        monthlyData[monthStr].cost += cost;
 
-        // Quarterly
         const quarter = Math.floor(date.getMonth() / 3) + 1;
         const quarterStr = `${date.getFullYear()} Q${quarter}`;
-        quarterlyData[quarterStr] = (quarterlyData[quarterStr] || 0) + amount;
+        if (!quarterlyData[quarterStr]) quarterlyData[quarterStr] = { revenue: 0, cost: 0 };
+        quarterlyData[quarterStr].revenue += amount;
+        quarterlyData[quarterStr].cost += cost;
 
-        // Yearly
         const yearStr = `${date.getFullYear()}`;
-        yearlyData[yearStr] = (yearlyData[yearStr] || 0) + amount;
+        if (!yearlyData[yearStr]) yearlyData[yearStr] = { revenue: 0, cost: 0 };
+        yearlyData[yearStr].revenue += amount;
+        yearlyData[yearStr].cost += cost;
       }
     });
 
-    // 1. Daily timeline (within range, up to 366 days, or last 30 days of the range)
-    const dailyTimeline: { date: string; revenue: number }[] = [];
+    const formatPoint = (dateStr: string, rev: number, costVal: number) => {
+      const revenue = parseFloat(rev.toFixed(2));
+      const cost = parseFloat(costVal.toFixed(2));
+      const profit = parseFloat((revenue - cost).toFixed(2));
+      const marginPercent =
+        revenue > 0
+          ? parseFloat((((revenue - cost) / revenue) * 100).toFixed(1))
+          : null;
+      return { date: dateStr, revenue, cost, profit, marginPercent };
+    };
+
+    const dailyTimeline: any[] = [];
     if (!query?.type || query.type === 'daily') {
       const startDay = new Date(start);
       const endDay = new Date(end);
-      
+
       const diffTime = Math.abs(endDay.getTime() - startDay.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       if (diffDays <= 366) {
         for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toLocaleDateString();
-          dailyTimeline.push({
-            date: dateStr,
-            revenue: dailyData[dateStr] || 0,
-          });
+          const dataObj = dailyData[dateStr] || { revenue: 0, cost: 0 };
+          dailyTimeline.push(formatPoint(dateStr, dataObj.revenue, dataObj.cost));
         }
       } else {
-        // Range too large: default to last 30 days of the range
         const startLimit = new Date(endDay.getTime() - 29 * 24 * 60 * 60 * 1000);
         for (let d = new Date(startLimit); d <= endDay; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toLocaleDateString();
-          dailyTimeline.push({
-            date: dateStr,
-            revenue: dailyData[dateStr] || 0,
-          });
+          const dataObj = dailyData[dateStr] || { revenue: 0, cost: 0 };
+          dailyTimeline.push(formatPoint(dateStr, dataObj.revenue, dataObj.cost));
         }
       }
     }
 
-    // 2. Monthly timeline
-    const monthlyTimeline: { date: string; revenue: number }[] = [];
+    const monthlyTimeline: any[] = [];
     if (!query?.type || query.type === 'monthly') {
       const list = Object.keys(monthlyData)
-        .map((key) => ({ name: key, date: new Date(key), revenue: monthlyData[key] }))
+        .map((key) => ({
+          name: key,
+          date: new Date(key),
+          revenue: monthlyData[key].revenue,
+          cost: monthlyData[key].cost,
+        }))
         .sort((a, b) => a.date.getTime() - b.date.getTime())
-        .map((item) => ({ date: item.name, revenue: item.revenue }));
+        .map((item) => formatPoint(item.name, item.revenue, item.cost));
       monthlyTimeline.push(...list);
     }
 
-    // 3. Quarterly timeline
-    const quarterlyTimeline: { date: string; revenue: number }[] = [];
+    const quarterlyTimeline: any[] = [];
     if (!query?.type || query.type === 'quarterly') {
       const list = Object.keys(quarterlyData)
         .sort()
-        .map((key) => ({ date: key, revenue: quarterlyData[key] }));
+        .map((key) =>
+          formatPoint(key, quarterlyData[key].revenue, quarterlyData[key].cost),
+        );
       quarterlyTimeline.push(...list);
     }
 
-    // 4. Yearly timeline
-    const yearlyTimeline: { date: string; revenue: number }[] = [];
+    const yearlyTimeline: any[] = [];
     if (!query?.type || query.type === 'yearly') {
       const list = Object.keys(yearlyData)
         .sort()
-        .map((key) => ({ date: key, revenue: yearlyData[key] }));
+        .map((key) =>
+          formatPoint(key, yearlyData[key].revenue, yearlyData[key].cost),
+        );
       yearlyTimeline.push(...list);
     }
 
@@ -744,6 +832,9 @@ export class OrdersService {
       totalPendingRevenue,
       modeBreakdown,
       cashLogs,
+      totalCost,
+      totalGrossProfit,
+      overallMarginPercent,
       timeline: {
         daily: dailyTimeline,
         monthly: monthlyTimeline,
@@ -796,7 +887,7 @@ export class OrdersService {
     }
 
     qb.andWhere(
-      '((order.paymentStatus = :paidStatus AND order.paymentUpdatedAt BETWEEN :start AND :end) OR (order.paymentStatus = :unpaidStatus AND order.createdAt BETWEEN :start AND :end))',
+      '((order.paymentStatus = :paidStatus AND COALESCE(order.paymentUpdatedAt, order.createdAt) BETWEEN :start AND :end) OR (order.paymentStatus = :unpaidStatus AND order.createdAt BETWEEN :start AND :end))',
       {
         paidStatus: PaymentStatus.PAID,
         unpaidStatus: PaymentStatus.UNPAID,
@@ -808,7 +899,71 @@ export class OrdersService {
     qb.orderBy('order.createdAt', 'DESC');
     qb.skip(skip).take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
+    const [orders, total] = await qb.getManyAndCount();
+
+    // Two-step fetch to avoid TypeORM nested collection-join pagination corruption
+    if (orders.length > 0) {
+      const orderIds = orders.map((o) => o.id);
+      const ordersWithItems = await this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.items', 'orderItem')
+        .leftJoinAndSelect('orderItem.item', 'item')
+        .leftJoinAndSelect('item.priceHistory', 'priceHistory')
+        .where('order.id IN (:...ids)', { ids: orderIds })
+        .getMany();
+
+      const itemsMap = new Map<string, OrderItem[]>();
+      ordersWithItems.forEach((o) => {
+        itemsMap.set(o.id, o.items || []);
+      });
+
+      orders.forEach((o) => {
+        o.items = itemsMap.get(o.id) || [];
+      });
+    }
+
+    // Compute per-order cost / profit / margin using price history for order creation date
+    const data = orders.map((order) => {
+      let estimatedCost: number | null = null;
+      let hasAnyCost = false;
+      let costSum = 0;
+
+      for (const oi of order.items ?? []) {
+        const activeAtOrder = findActivePriceHistoryForOrder(
+          oi.item?.priceHistory,
+          order.createdAt,
+        );
+        if (
+          activeAtOrder?.costPrice !== null &&
+          activeAtOrder?.costPrice !== undefined
+        ) {
+          hasAnyCost = true;
+          costSum += parseFloat(activeAtOrder.costPrice as any) * oi.quantity;
+        }
+      }
+
+      if (hasAnyCost) estimatedCost = parseFloat(costSum.toFixed(2));
+
+      const revenue = parseFloat(order.totalAmount as any);
+      const grossProfit =
+        estimatedCost !== null
+          ? parseFloat((revenue - estimatedCost).toFixed(2))
+          : null;
+      const marginPercent =
+        estimatedCost !== null && revenue > 0
+          ? parseFloat(
+              (((revenue - estimatedCost) / revenue) * 100).toFixed(2),
+            )
+          : null;
+
+      return {
+        ...order,
+        estimatedCost,
+        grossProfit,
+        marginPercent,
+      };
+    });
+
     return { data, total };
   }
 
@@ -868,130 +1023,23 @@ export class OrdersService {
 
       const orderNumber = getVal(row, 'ordernumber');
       const orderDateStr = getVal(row, 'orderdate');
-      const name = getVal(row, 'customername');
-      const contact = getVal(row, 'customercontact');
-      const gender = getVal(row, 'customergender');
-      const location = getVal(row, 'customerlocation');
-      const address = getVal(row, 'customeraddress');
-      const sourceName = getVal(row, 'ordersource');
+      const customerName = getVal(row, 'customername');
+      const contact = getVal(row, 'contact');
+      const genderStr = getVal(row, 'gender');
+      const location = getVal(row, 'location');
+      const sourceStr = getVal(row, 'ordersource');
       const hubName = getVal(row, 'fulfillmenthub');
-      const expectedDeliveryDateStr = getVal(row, 'expecteddeliverydate');
-      const deliveryLocation = getVal(row, 'deliverylocation');
       const itemsStr = getVal(row, 'items');
-      const totalAmountStr = getVal(row, 'totalamount');
-      const orderStatusStr = getVal(row, 'orderstatus');
       const paymentStatusStr = getVal(row, 'paymentstatus');
       const paymentModeStr = getVal(row, 'paymentmode');
       const cashDetails = getVal(row, 'cashcollectiondetails');
 
-      const label = `Row ${rowIndex + 1} (${orderNumber || contact || 'Unknown'}): `;
-
-      if (
-        !name ||
-        !contact ||
-        !location ||
-        !sourceName ||
-        !deliveryLocation ||
-        !itemsStr ||
-        !orderStatusStr ||
-        !paymentStatusStr
-      ) {
+      if (!orderNumber || !contact || !itemsStr) {
         errors.push(
-          `${label}Missing required columns (Customer Name, Contact, Location, Order Source, Delivery Location, Items, Order Status, and Payment Status are required)`,
+          `Row ${rowIndex + 1}: Missing required fields (OrderNumber, Contact, or Items)`,
         );
         continue;
       }
-
-      let status: OrderStatus;
-      if (
-        Object.values(OrderStatus)
-          .map((v) => v.toLowerCase())
-          .includes(orderStatusStr.toLowerCase())
-      ) {
-        status = Object.values(OrderStatus).find(
-          (v) => v.toLowerCase() === orderStatusStr.toLowerCase(),
-        ) as OrderStatus;
-      } else {
-        errors.push(`${label}Invalid Order Status '${orderStatusStr}'`);
-        continue;
-      }
-
-      let paymentStatus: PaymentStatus;
-      if (paymentStatusStr.toLowerCase() === 'paid') {
-        paymentStatus = PaymentStatus.PAID;
-      } else if (paymentStatusStr.toLowerCase() === 'unpaid') {
-        paymentStatus = PaymentStatus.UNPAID;
-      } else {
-        errors.push(
-          `${label}Invalid Payment Status '${paymentStatusStr}' (must be Paid or Unpaid)`,
-        );
-        continue;
-      }
-
-      let paymentMode: PaymentMode | null = null;
-      if (paymentStatus === PaymentStatus.PAID && paymentModeStr) {
-        if (
-          Object.values(PaymentMode)
-            .map((v) => v.toLowerCase())
-            .includes(paymentModeStr.toLowerCase())
-        ) {
-          paymentMode = Object.values(PaymentMode).find(
-            (v) => v.toLowerCase() === paymentModeStr.toLowerCase(),
-          ) as PaymentMode;
-        } else {
-          errors.push(`${label}Invalid Payment Mode '${paymentModeStr}'`);
-          continue;
-        }
-      }
-
-      let customerGender: Gender = Gender.MALE;
-      if (gender.toLowerCase() === 'female') {
-        customerGender = Gender.FEMALE;
-      } else if (gender.toLowerCase() === 'other') {
-        customerGender = Gender.OTHER;
-      }
-
-      const itemsList: { itemId: string; name: string; quantity: number }[] =
-        [];
-      const itemsParts = itemsStr.split(',').map((p) => p.trim());
-      let itemsError = false;
-
-      for (const part of itemsParts) {
-        const colonIdx = part.lastIndexOf(':');
-        if (colonIdx === -1) {
-          errors.push(
-            `${label}Invalid Items format. Expected ItemName:Quantity`,
-          );
-          itemsError = true;
-          break;
-        }
-        const itemName = part.substring(0, colonIdx).trim();
-        const qtyVal = parseInt(part.substring(colonIdx + 1).trim(), 10);
-        if (!itemName || isNaN(qtyVal) || qtyVal <= 0) {
-          errors.push(`${label}Invalid Item Name or quantity in '${part}'`);
-          itemsError = true;
-          break;
-        }
-
-        const itemObj = await this.itemRepository.findOne({
-          where: { name: Like(`%${itemName}%`) },
-        });
-        if (!itemObj) {
-          errors.push(
-            `${label}Item '${itemName}' not found in Snacking Catalog`,
-          );
-          itemsError = true;
-          break;
-        }
-
-        itemsList.push({
-          itemId: itemObj.id,
-          name: itemObj.name,
-          quantity: qtyVal,
-        });
-      }
-
-      if (itemsError) continue;
 
       try {
         await this.dataSource.transaction(async (manager) => {
@@ -999,156 +1047,133 @@ export class OrdersService {
             where: { contact },
           });
           if (!customer) {
-            customer = new Customer();
-            customer.contact = contact;
-            customer.name = name;
-            customer.gender = customerGender;
-            customer.location = location;
-            customer.address = address || null;
+            let gender: Gender = Gender.OTHER;
+            if (genderStr.toLowerCase() === 'male') gender = Gender.MALE;
+            if (genderStr.toLowerCase() === 'female') gender = Gender.FEMALE;
+
+            customer = manager.create(Customer, {
+              name: customerName || 'Imported Customer',
+              contact,
+              gender,
+              location: location || 'Ahmedabad',
+            });
             customer = await manager.save(Customer, customer);
-          } else {
-            let customerChanged = false;
-            if (name && customer.name !== name) {
-              customer.name = name;
-              customerChanged = true;
-            }
-            if (address !== undefined && customer.address !== address) {
-              customer.address = address || null;
-              customerChanged = true;
-            }
-            if (location && customer.location !== location) {
-              customer.location = location;
-              customerChanged = true;
-            }
-            if (customerChanged) {
-              customer = await manager.save(Customer, customer);
-            }
           }
 
-          let sourceObj = await manager.findOne(OrderSource, {
-            where: { name: Like(`%${sourceName}%`) },
-          });
-          if (!sourceObj) {
-            sourceObj = new OrderSource();
-            sourceObj.name = sourceName;
-            sourceObj = await manager.save(OrderSource, sourceObj);
+          let source: OrderSource | null = null;
+          if (sourceStr) {
+            source = await manager.findOne(OrderSource, {
+              where: { name: Like(`%${sourceStr}%`) },
+            });
           }
 
-          let hubObj = null;
+          let fulfillmentHub: InventoryLocation | null = null;
           if (hubName) {
-            hubObj = await manager.findOne(InventoryLocation, {
+            fulfillmentHub = await manager.findOne(InventoryLocation, {
               where: { name: Like(`%${hubName}%`) },
             });
           }
-          if (!hubObj) {
-            hubObj = await manager.findOne(InventoryLocation, {
-              order: { name: 'ASC' },
-            });
+
+          let paymentStatus: PaymentStatus = PaymentStatus.UNPAID;
+          if (paymentStatusStr.toLowerCase() === 'paid') {
+            paymentStatus = PaymentStatus.PAID;
           }
 
-          let resolvedOrderNumber = orderNumber;
-          if (resolvedOrderNumber) {
-            const existingOrder = await manager.findOne(Order, {
-              where: { orderNumber: resolvedOrderNumber },
-            });
-            if (existingOrder) {
-              throw new Error(
-                `Order Number '${resolvedOrderNumber}' already exists`,
-              );
+          let paymentMode: PaymentMode | null = null;
+          if (paymentModeStr) {
+            const pmLower = paymentModeStr.toLowerCase();
+            if (pmLower.includes('upi')) paymentMode = PaymentMode.UPI;
+            else if (pmLower.includes('cash')) paymentMode = PaymentMode.CASH;
+            else if (pmLower.includes('card')) paymentMode = PaymentMode.CARD;
+            else if (pmLower.includes('net')) paymentMode = PaymentMode.NET_BANKING;
+          }
+
+          const orderDate = orderDateStr ? new Date(orderDateStr) : new Date();
+
+          const existingOrder = await manager.findOne(Order, {
+            where: { orderNumber },
+          });
+
+          let orderObj: Order;
+          if (existingOrder) {
+            orderObj = existingOrder;
+            orderObj.customer = customer;
+            if (source) orderObj.source = source;
+            if (fulfillmentHub) orderObj.fulfillmentHub = fulfillmentHub;
+            orderObj.paymentStatus = paymentStatus;
+            orderObj.paymentMode = paymentMode;
+            orderObj.cashCollectionDetails = cashDetails || null;
+            orderObj.createdAt = orderDate;
+            if (paymentStatus === PaymentStatus.PAID) {
+              orderObj.paymentUpdatedAt = orderDate;
             }
           } else {
-            const lastOrder = await manager.findOne(Order, {
-              where: {},
-              order: { orderNumber: 'DESC' },
+            orderObj = manager.create(Order, {
+              orderNumber,
+              customer,
+              source,
+              fulfillmentHub,
+              status: OrderStatus.DELIVERED,
+              totalAmount: 0,
+              createdAt: orderDate,
+              paymentStatus,
+              paymentMode,
+              cashCollectionDetails: cashDetails || null,
+              paymentUpdatedAt: paymentStatus === PaymentStatus.PAID ? orderDate : null,
             });
-            let nextSerial = 10001;
-            if (lastOrder && lastOrder.orderNumber.startsWith('KB-')) {
-              const lastSerial = parseInt(
-                lastOrder.orderNumber.replace('KB-', ''),
-                10,
-              );
-              if (!isNaN(lastSerial)) {
-                nextSerial = lastSerial + 1;
-              }
-            }
-            resolvedOrderNumber = `KB-${nextSerial}`;
           }
 
-          const order = new Order();
-          order.orderNumber = resolvedOrderNumber;
-          order.customer = customer;
-          order.status = status;
-          order.paymentStatus = paymentStatus;
-          order.paymentMode = paymentMode;
-          order.cashCollectionDetails =
-            paymentMode === PaymentMode.CASH ? cashDetails || null : null;
-          order.source = sourceObj;
-          order.fulfillmentHub = hubObj;
+          const savedOrder = await manager.save(Order, orderObj);
 
-          if (orderDateStr) {
-            order.createdAt = new Date(orderDateStr);
-          }
-          if (expectedDeliveryDateStr) {
-            order.expectedDeliveryDate = new Date(expectedDeliveryDateStr);
-          }
-          if (deliveryLocation) {
-            order.deliveryLocation = deliveryLocation;
-          }
-          if (paymentStatus === PaymentStatus.PAID) {
-            order.paymentUpdatedAt = orderDateStr
-              ? new Date(orderDateStr)
-              : new Date();
+          if (existingOrder) {
+            await manager.delete(OrderItem, { order: { id: savedOrder.id } });
           }
 
-          order.totalAmount = 0;
-          const savedOrder = await manager.save(Order, order);
+          const itemPairs = itemsStr.split(';');
+          let calculatedTotal = 0;
 
-          let totalAmount = 0;
-          for (const itemReq of itemsList) {
-            const itemObj = await manager.findOne(Item, {
-              where: { id: itemReq.itemId },
+          for (const pair of itemPairs) {
+            const parts = pair.split(':');
+            if (parts.length !== 2) continue;
+            const itemName = parts[0].trim();
+            const qty = parseInt(parts[1].trim(), 10);
+            if (isNaN(qty) || qty <= 0) continue;
+
+            const item = await manager.findOne(Item, {
+              where: { name: Like(`%${itemName}%`) },
               relations: { priceHistory: true },
             });
-            if (!itemObj) throw new Error(`Item ${itemReq.name} not found`);
 
-            const sortedHistory = [...itemObj.priceHistory].sort(
+            if (!item) {
+              throw new NotFoundException(`Item "${itemName}" not found`);
+            }
+
+            const sortedHistory = [...item.priceHistory].sort(
               (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
             );
-            const priceAtOrder =
+            const activePrice =
               sortedHistory.length > 0
                 ? parseFloat(sortedHistory[0].price as any)
                 : 0;
+            const itemTotal = activePrice * qty;
+            calculatedTotal += itemTotal;
 
-            const orderItem = new OrderItem();
-            orderItem.order = savedOrder;
-            orderItem.item = itemObj;
-            orderItem.quantity = itemReq.quantity;
-            orderItem.priceAtOrder = priceAtOrder;
+            const orderItem = manager.create(OrderItem, {
+              order: savedOrder,
+              item,
+              quantity: qty,
+              priceAtOrder: activePrice,
+            });
             await manager.save(OrderItem, orderItem);
-
-            totalAmount += priceAtOrder * itemReq.quantity;
           }
 
-          if (totalAmountStr && !isNaN(parseFloat(totalAmountStr))) {
-            savedOrder.totalAmount = parseFloat(totalAmountStr);
-          } else {
-            savedOrder.totalAmount = Math.round(totalAmount * 100) / 100;
-          }
-          const finalizedOrder = await manager.save(Order, savedOrder);
-
-          const history = new OrderStatusHistory();
-          history.order = finalizedOrder;
-          history.status = status;
-          history.changedBy = 'Import Manager';
-          if (orderDateStr) {
-            history.changedAt = new Date(orderDateStr);
-          }
-          await manager.save(OrderStatusHistory, history);
+          savedOrder.totalAmount = calculatedTotal;
+          await manager.save(Order, savedOrder);
         });
 
         successCount++;
       } catch (err: any) {
-        errors.push(`${label}${err.message || err}`);
+        errors.push(`Row ${rowIndex + 1} (${orderNumber}): ${err.message}`);
       }
     }
 

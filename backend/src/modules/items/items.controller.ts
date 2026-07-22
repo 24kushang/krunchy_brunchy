@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -30,6 +31,7 @@ export class ItemsController {
     body: {
       name: string;
       price: number;
+      costPrice?: number | null;
       ingredients?: string[];
       bestBeforeDays: number;
       imageUrl?: string;
@@ -45,12 +47,26 @@ export class ItemsController {
     body: {
       name?: string;
       price?: number;
+      costPrice?: number | null;
       ingredients?: string[];
       bestBeforeDays?: number;
       imageUrl?: string;
     },
   ) {
     return this.itemsService.update(id, body);
+  }
+
+  /** Patch costPrice (and optionally price) on a specific historic price-history row. */
+  @Patch('price-history/:entryId')
+  async updatePriceHistoryEntry(
+    @Param('entryId') entryId: string,
+    @Body()
+    body: {
+      costPrice?: number | null;
+      price?: number;
+    },
+  ) {
+    return this.itemsService.updatePriceHistoryEntry(entryId, body);
   }
 
   @Delete(':id')

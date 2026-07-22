@@ -18,10 +18,20 @@ import {
   CircularProgress,
   Divider,
   Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Tooltip,
   useTheme
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import SaveIcon from '@mui/icons-material/Save';
+import CancelIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import UploadIcon from '@mui/icons-material/CloudUpload';
 import GraphIcon from '@mui/icons-material/TrendingUp';
@@ -32,7 +42,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip
+  Tooltip as RechartsTooltip,
+  Legend,
 } from 'recharts';
 import api from '../utils/api';
 
@@ -43,12 +54,24 @@ interface Item {
   bestBeforeDays: number;
   imageUrl: string;
   activePrice: number;
+  activeCostPrice: number | null;
+  activeMarginPercent: number | null;
 }
 
 interface PriceHistoryEntry {
   id: string;
   price: number;
+  costPrice: number | null;
+  marginPercent: number | null;
   changedAt: string;
+}
+
+/** Color coding for margin chips */
+function marginColor(pct: number | null): 'success' | 'warning' | 'error' | 'default' {
+  if (pct === null) return 'default';
+  if (pct >= 30) return 'success';
+  if (pct >= 10) return 'warning';
+  return 'error';
 }
 
 export default function Items() {
@@ -65,6 +88,7 @@ export default function Items() {
   // Form Fields
   const [name, setName] = useState('');
   const [price, setPrice] = useState<number | ''>('');
+  const [costPrice, setCostPrice] = useState<number | ''>('');
   const [bestBeforeDays, setBestBeforeDays] = useState<number | ''>('');
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState('');
@@ -73,6 +97,11 @@ export default function Items() {
   // Price History States
   const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Inline edit state for price history rows
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editEntryPrice, setEditEntryPrice] = useState<number | ''>('');
+  const [editEntryCost, setEditEntryCost] = useState<number | ''>('');
 
   const fetchItems = () => {
     setLoading(true);
@@ -104,12 +133,7 @@ export default function Items() {
     setLoadingHistory(true);
     api.get(`/api/items/${itemId}/price-history`)
       .then((res) => {
-        // Map history to simple objects for Recharts
-        const formatted = res.data.map((h: any) => ({
-          ...h,
-          price: parseFloat(h.price),
-          date: new Date(h.changedAt).toLocaleDateString() }));
-        setPriceHistory(formatted);
+        setPriceHistory(res.data);
         setLoadingHistory(false);
       })
       .catch((err) => {
@@ -123,6 +147,7 @@ export default function Items() {
     setEditingItemId(null);
     setName('');
     setPrice('');
+    setCostPrice('');
     setBestBeforeDays('');
     setIngredients([]);
     setImageUrl('');
@@ -135,9 +160,12 @@ export default function Items() {
     setEditingItemId(item.id);
     setName(item.name);
     setPrice(item.activePrice);
+    setCostPrice(item.activeCostPrice !== null ? item.activeCostPrice : '');
     setBestBeforeDays(item.bestBeforeDays);
     setIngredients(item.ingredients || []);
     setImageUrl(item.imageUrl || '');
+    setPriceHistory([]);
+    setEditingEntryId(null);
     setOpenDialog(true);
     fetchPriceHistory(item.id);
   };
@@ -154,8 +182,8 @@ export default function Items() {
     setUploading(true);
     try {
       const res = await api.post('/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data' } });
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       setImageUrl(res.data.url);
     } catch (err) {
       console.error('File upload failed', err);
@@ -171,12 +199,14 @@ export default function Items() {
       return;
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       name,
       price: Number(price),
       bestBeforeDays: Number(bestBeforeDays),
       ingredients,
-      imageUrl };
+      imageUrl,
+    };
+    if (costPrice !== '') payload.costPrice = Number(costPrice);
 
     try {
       if (isEditMode && editingItemId) {
@@ -191,6 +221,43 @@ export default function Items() {
       alert(err.response?.data?.message || 'Failed to save item');
     }
   };
+
+  // Start editing a price history row inline
+  const startEditEntry = (entry: PriceHistoryEntry) => {
+    setEditingEntryId(entry.id);
+    setEditEntryPrice(entry.price);
+    setEditEntryCost(entry.costPrice !== null ? entry.costPrice : '');
+  };
+
+  const cancelEditEntry = () => {
+    setEditingEntryId(null);
+    setEditEntryPrice('');
+    setEditEntryCost('');
+  };
+
+  const saveEditEntry = async (entryId: string) => {
+    const payload: Record<string, any> = {};
+    if (editEntryPrice !== '') payload.price = Number(editEntryPrice);
+    if (editEntryCost !== '') payload.costPrice = Number(editEntryCost);
+    else payload.costPrice = null; // explicitly clear if left blank
+
+    try {
+      await api.patch(`/api/items/price-history/${entryId}`, payload);
+      // Refresh history
+      if (editingItemId) fetchPriceHistory(editingItemId);
+      cancelEditEntry();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to update price history entry');
+    }
+  };
+
+  // Chart data: map to Recharts format
+  const chartData = priceHistory.map((h) => ({
+    date: new Date(h.changedAt).toLocaleDateString(),
+    price: h.price,
+    cost: h.costPrice,
+  }));
 
   return (
     <Box sx={{ pb: 6 }}>
@@ -232,16 +299,11 @@ export default function Items() {
                   display: 'flex',
                   flexDirection: 'column',
                   position: 'relative',
-                  '&:hover': {
-                    boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.05)' } }}
+                  '&:hover': { boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.05)' },
+                }}
               >
                 {item.imageUrl ? (
-                  <CardMedia
-                    component="img"
-                    height="160"
-                    image={item.imageUrl}
-                    alt={item.name}
-                  />
+                  <CardMedia component="img" height="160" image={item.imageUrl} alt={item.name} />
                 ) : (
                   <Box sx={{ height: 160, bgcolor: 'rgba(255, 90, 9, 0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Typography variant="h2">🍿</Typography>
@@ -253,9 +315,36 @@ export default function Items() {
                     {item.name}
                   </Typography>
 
-                  <Typography variant="h5" color="primary" sx={{ fontWeight: 800, mb: 2 }}>
-                    Rs. {item.activePrice.toFixed(2)}
-                  </Typography>
+                  {/* Pricing row */}
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
+                    <Typography variant="h5" color="primary" sx={{ fontWeight: 800 }}>
+                      Rs. {item.activePrice.toFixed(2)}
+                    </Typography>
+                    {item.activeCostPrice !== null && (
+                      <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>
+                        Cost: Rs. {item.activeCostPrice.toFixed(2)}
+                      </Typography>
+                    )}
+                  </Stack>
+
+                  {/* Margin chip */}
+                  {item.activeMarginPercent !== null ? (
+                    <Chip
+                      label={`Margin: ${item.activeMarginPercent.toFixed(1)}%`}
+                      size="small"
+                      color={marginColor(item.activeMarginPercent)}
+                      variant="filled"
+                      sx={{ fontWeight: 700, mb: 1.5, fontSize: '0.72rem' }}
+                    />
+                  ) : (
+                    <Chip
+                      label="Margin: —"
+                      size="small"
+                      color="default"
+                      variant="outlined"
+                      sx={{ mb: 1.5, fontSize: '0.72rem' }}
+                    />
+                  )}
 
                   <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
                     Expiry Cycle: **{item.bestBeforeDays} Days**
@@ -294,9 +383,7 @@ export default function Items() {
           {items.length === 0 && (
             <Grid size={12}>
               <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'transparent', border: '1px dashed #EFEAE4' }}>
-                <Typography color="textSecondary">
-                  No items found in active inventory.
-                </Typography>
+                <Typography color="textSecondary">No items found in active inventory.</Typography>
               </Paper>
             </Grid>
           )}
@@ -304,7 +391,7 @@ export default function Items() {
       )}
 
       {/* Dialog for Item Create / Update */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Update Inventory Item' : 'Introduce New Snack Item'}
@@ -313,7 +400,7 @@ export default function Items() {
         <DialogContent sx={{ py: 3 }}>
           <Grid container spacing={3}>
             {/* Form Fields */}
-            <Grid size={{ xs: 12, md: isEditMode ? 6 : 12 }}>
+            <Grid size={{ xs: 12, md: isEditMode ? 4 : 12 }}>
               <Stack spacing={2.5}>
                 <TextField
                   label="Item Name"
@@ -322,11 +409,11 @@ export default function Items() {
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
-                
+
                 <Grid container spacing={2}>
                   <Grid size={6}>
                     <TextField
-                      label="Active Price (Rs.)"
+                      label="Selling Price (Rs.)"
                       type="number"
                       fullWidth
                       value={price}
@@ -336,15 +423,28 @@ export default function Items() {
                   </Grid>
                   <Grid size={6}>
                     <TextField
-                      label="Best Before Duration (Days)"
+                      label="Cost Price (Rs.) — optional"
                       type="number"
                       fullWidth
-                      value={bestBeforeDays}
-                      onChange={(e) => setBestBeforeDays(e.target.value === '' ? '' : Number(e.target.value))}
-                      required
+                      value={costPrice}
+                      onChange={(e) => setCostPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                      helperText={
+                        price !== '' && costPrice !== ''
+                          ? `Margin: ${(((Number(price) - Number(costPrice)) / Number(price)) * 100).toFixed(1)}%`
+                          : undefined
+                      }
                     />
                   </Grid>
                 </Grid>
+
+                <TextField
+                  label="Best Before Duration (Days)"
+                  type="number"
+                  fullWidth
+                  value={bestBeforeDays}
+                  onChange={(e) => setBestBeforeDays(e.target.value === '' ? '' : Number(e.target.value))}
+                  required
+                />
 
                 {/* Autocomplete Chip Component for Ingredients */}
                 <Autocomplete
@@ -358,7 +458,7 @@ export default function Items() {
                   )}
                 />
 
-                {/* Google Drive Upload Component */}
+                {/* Google Drive Upload */}
                 <Box>
                   <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1, fontWeight: 700 }}>
                     Snack Catalog Photo (Upload to Google Drive)
@@ -373,7 +473,6 @@ export default function Items() {
                       {uploading ? 'Uploading to Drive...' : 'Upload File'}
                       <input type="file" hidden accept="image/*,video/*" onChange={handleFileUpload} />
                     </Button>
-                    
                     {imageUrl && (
                       <Chip
                         label="Drive File Configured"
@@ -388,14 +487,14 @@ export default function Items() {
               </Stack>
             </Grid>
 
-            {/* Price History Line Chart (Edit Mode Only) */}
+            {/* Price History (Edit Mode Only) */}
             {isEditMode && (
-              <Grid size={{ xs: 12, md: 6 }}>
+              <Grid size={{ xs: 12, md: 8 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <GraphIcon color="primary" />
-                  Historical Value Adjustments
+                  Historical Price & Cost
                 </Typography>
-                
+
                 {loadingHistory ? (
                   <Stack direction="row" sx={{ justifyContent: 'center', py: 6 }}>
                     <CircularProgress size={30} />
@@ -405,24 +504,143 @@ export default function Items() {
                     No pricing history logged yet.
                   </Typography>
                 ) : (
-                  <Box sx={{ height: 260, width: '100%', pr: 2 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={priceHistory}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="date" fontSize={10} tickLine={false} />
-                        <YAxis fontSize={10} domain={['auto', 'auto']} tickLine={false} />
-                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                        <Line
-                          type="monotone"
-                          dataKey="price"
-                          stroke="#FF5A09"
-                          strokeWidth={3}
-                          activeDot={{ r: 6 }}
-                          name="Price (Rs.)"
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </Box>
+                  <>
+                    {/* Dual-line chart: selling price + cost price */}
+                    <Box sx={{ height: 220, width: '100%', mb: 3 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="date" fontSize={10} tickLine={false} />
+                          <YAxis fontSize={10} domain={['auto', 'auto']} tickLine={false} />
+                          <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Line
+                            type="monotone"
+                            dataKey="price"
+                            stroke="#FF5A09"
+                            strokeWidth={3}
+                            activeDot={{ r: 6 }}
+                            name="Selling Price (Rs.)"
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="cost"
+                            stroke="#0A3BB0"
+                            strokeWidth={2}
+                            strokeDasharray="5 3"
+                            activeDot={{ r: 5 }}
+                            name="Cost Price (Rs.)"
+                            connectNulls
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </Box>
+
+                    {/* Editable history table */}
+                    <TableContainer
+                      component={Paper}
+                      variant="outlined"
+                      sx={{ maxHeight: 280, overflow: 'auto', borderRadius: 2 }}
+                    >
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow sx={{ '& th': { fontWeight: 800, bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120' } }}>
+                            <TableCell>Date</TableCell>
+                            <TableCell align="right">Selling (Rs.)</TableCell>
+                            <TableCell align="right">Cost (Rs.)</TableCell>
+                            <TableCell align="right">Margin %</TableCell>
+                            <TableCell align="center">Edit</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {[...priceHistory].reverse().map((entry) => {
+                            const isRowEditing = editingEntryId === entry.id;
+                            return (
+                              <TableRow key={entry.id} hover>
+                                <TableCell sx={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                                  {new Date(entry.changedAt).toLocaleString()}
+                                </TableCell>
+
+                                {isRowEditing ? (
+                                  <>
+                                    <TableCell align="right">
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        value={editEntryPrice}
+                                        onChange={(e) => setEditEntryPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                                        sx={{ width: 90 }}
+                                        slotProps={{ htmlInput: { style: { fontSize: '0.78rem' } } }}
+                                      />
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <TextField
+                                        size="small"
+                                        type="number"
+                                        placeholder="—"
+                                        value={editEntryCost}
+                                        onChange={(e) => setEditEntryCost(e.target.value === '' ? '' : Number(e.target.value))}
+                                        sx={{ width: 90 }}
+                                        slotProps={{ htmlInput: { style: { fontSize: '0.78rem' } } }}
+                                      />
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontSize: '0.78rem', color: 'textSecondary' }}>
+                                      {editEntryPrice !== '' && editEntryCost !== '' && Number(editEntryPrice) > 0
+                                        ? `${(((Number(editEntryPrice) - Number(editEntryCost)) / Number(editEntryPrice)) * 100).toFixed(1)}%`
+                                        : '—'}
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'center' }}>
+                                        <Tooltip title="Save">
+                                          <IconButton size="small" color="success" onClick={() => saveEditEntry(entry.id)}>
+                                            <SaveIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Cancel">
+                                          <IconButton size="small" onClick={cancelEditEntry}>
+                                            <CancelIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      </Stack>
+                                    </TableCell>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableCell align="right" sx={{ fontWeight: 700, color: '#FF5A09', fontSize: '0.82rem' }}>
+                                      {entry.price.toFixed(2)}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ fontSize: '0.82rem' }}>
+                                      {entry.costPrice !== null ? entry.costPrice.toFixed(2) : '—'}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      {entry.marginPercent !== null ? (
+                                        <Chip
+                                          label={`${entry.marginPercent.toFixed(1)}%`}
+                                          size="small"
+                                          color={marginColor(entry.marginPercent)}
+                                          variant="filled"
+                                          sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                                        />
+                                      ) : (
+                                        <Typography variant="caption" color="textSecondary">—</Typography>
+                                      )}
+                                    </TableCell>
+                                    <TableCell align="center">
+                                      <Tooltip title="Edit this entry">
+                                        <IconButton size="small" onClick={() => startEditEntry(entry)}>
+                                          <EditIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </>
                 )}
               </Grid>
             )}

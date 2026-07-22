@@ -1,8 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Item } from '../../database/entities/item.entity';
 import { ItemPriceHistory } from '../../database/entities/item-price-history.entity';
+
+/** Compute margin percentage given selling price and optional cost price. */
+function computeMargin(price: number, costPrice: number | null): number | null {
+  if (costPrice === null || costPrice === undefined || price === 0) return null;
+  return parseFloat((((price - costPrice) / price) * 100).toFixed(2));
+}
 
 @Injectable()
 export class ItemsService {
@@ -26,16 +36,16 @@ export class ItemsService {
 
     const items = await qb.getMany();
 
-    // Map items to include activePrice
     return items.map((item) => {
-      // Find latest price history record
       const sortedHistory = [...item.priceHistory].sort(
         (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
       );
-      const activePrice =
-        sortedHistory.length > 0
-          ? parseFloat(sortedHistory[0].price as any)
-          : 0;
+      const latest = sortedHistory.length > 0 ? sortedHistory[0] : null;
+      const activePrice = latest ? parseFloat(latest.price as any) : 0;
+      const activeCostPrice =
+        latest?.costPrice !== null && latest?.costPrice !== undefined
+          ? parseFloat(latest.costPrice as any)
+          : null;
 
       return {
         id: item.id,
@@ -44,6 +54,8 @@ export class ItemsService {
         bestBeforeDays: item.bestBeforeDays,
         imageUrl: item.imageUrl,
         activePrice,
+        activeCostPrice,
+        activeMarginPercent: computeMargin(activePrice, activeCostPrice),
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       };
@@ -64,6 +76,7 @@ export class ItemsService {
   async create(data: {
     name: string;
     price: number;
+    costPrice?: number | null;
     ingredients?: string[];
     bestBeforeDays: number;
     imageUrl?: string;
@@ -76,15 +89,17 @@ export class ItemsService {
 
     const savedItem = await this.itemRepository.save(item);
 
-    // Save initial price history record
     const priceHist = new ItemPriceHistory();
     priceHist.item = savedItem;
     priceHist.price = data.price;
+    priceHist.costPrice = data.costPrice ?? null;
     await this.priceHistoryRepository.save(priceHist);
 
     return {
       ...savedItem,
       activePrice: data.price,
+      activeCostPrice: data.costPrice ?? null,
+      activeMarginPercent: computeMargin(data.price, data.costPrice ?? null),
     };
   }
 
@@ -93,6 +108,7 @@ export class ItemsService {
     data: {
       name?: string;
       price?: number;
+      costPrice?: number | null;
       ingredients?: string[];
       bestBeforeDays?: number;
       imageUrl?: string;
@@ -108,25 +124,47 @@ export class ItemsService {
 
     const savedItem = await this.itemRepository.save(item);
 
-    // Check if price has changed compared to the active price
     const sortedHistory = [...item.priceHistory].sort(
       (a, b) => b.changedAt.getTime() - a.changedAt.getTime(),
     );
-    const activePrice =
-      sortedHistory.length > 0 ? parseFloat(sortedHistory[0].price as any) : 0;
+    const latestEntry = sortedHistory.length > 0 ? sortedHistory[0] : null;
+    const activePrice = latestEntry
+      ? parseFloat(latestEntry.price as any)
+      : 0;
+    const existingCost =
+      latestEntry?.costPrice !== null && latestEntry?.costPrice !== undefined
+        ? parseFloat(latestEntry.costPrice as any)
+        : null;
 
+    // If selling price changed → create a new history row with the new price (and optional new cost).
+    // If only costPrice changed (no new selling price) → patch the latest history row in-place.
     let updatedActivePrice = activePrice;
-    if (data.price !== undefined && data.price !== activePrice) {
+    let updatedActiveCostPrice = existingCost;
+
+    const newPrice = data.price !== undefined ? data.price : undefined;
+    const newCost = data.costPrice !== undefined ? data.costPrice : undefined;
+
+    if (newPrice !== undefined && newPrice !== activePrice) {
       const priceHist = new ItemPriceHistory();
       priceHist.item = savedItem;
-      priceHist.price = data.price;
+      priceHist.price = newPrice;
+      priceHist.costPrice = newCost !== undefined ? newCost : existingCost;
       await this.priceHistoryRepository.save(priceHist);
-      updatedActivePrice = data.price;
+      updatedActivePrice = newPrice;
+      updatedActiveCostPrice = priceHist.costPrice;
+    } else if (newCost !== undefined && latestEntry) {
+      // Selling price unchanged; only update cost on latest entry
+      await this.priceHistoryRepository.update(latestEntry.id, {
+        costPrice: newCost,
+      });
+      updatedActiveCostPrice = newCost;
     }
 
     return {
       ...savedItem,
       activePrice: updatedActivePrice,
+      activeCostPrice: updatedActiveCostPrice,
+      activeMarginPercent: computeMargin(updatedActivePrice, updatedActiveCostPrice),
     };
   }
 
@@ -135,11 +173,64 @@ export class ItemsService {
     await this.itemRepository.remove(item);
   }
 
-  async getPriceHistory(id: string): Promise<ItemPriceHistory[]> {
+  async getPriceHistory(id: string): Promise<any[]> {
     const item = await this.findOne(id);
-    return this.priceHistoryRepository.find({
+    const rows = await this.priceHistoryRepository.find({
       where: { item: { id: item.id } },
       order: { changedAt: 'ASC' },
     });
+
+    return rows.map((row) => {
+      const price = parseFloat(row.price as any);
+      const costPrice =
+        row.costPrice !== null && row.costPrice !== undefined
+          ? parseFloat(row.costPrice as any)
+          : null;
+      return {
+        id: row.id,
+        price,
+        costPrice,
+        marginPercent: computeMargin(price, costPrice),
+        changedAt: row.changedAt,
+      };
+    });
+  }
+
+  /** Patch costPrice (and optionally price) on any existing history entry by its UUID. */
+  async updatePriceHistoryEntry(
+    entryId: string,
+    data: { costPrice?: number | null; price?: number },
+  ): Promise<any> {
+    const entry = await this.priceHistoryRepository.findOne({
+      where: { id: entryId },
+      relations: { item: true },
+    });
+    if (!entry) {
+      throw new NotFoundException(
+        `Price history entry with ID ${entryId} not found`,
+      );
+    }
+    if (data.price !== undefined) {
+      if (data.price <= 0) {
+        throw new BadRequestException('Price must be greater than zero');
+      }
+      entry.price = data.price;
+    }
+    if (data.costPrice !== undefined) {
+      entry.costPrice = data.costPrice;
+    }
+    const saved = await this.priceHistoryRepository.save(entry);
+    const price = parseFloat(saved.price as any);
+    const costPrice =
+      saved.costPrice !== null && saved.costPrice !== undefined
+        ? parseFloat(saved.costPrice as any)
+        : null;
+    return {
+      id: saved.id,
+      price,
+      costPrice,
+      marginPercent: computeMargin(price, costPrice),
+      changedAt: saved.changedAt,
+    };
   }
 }

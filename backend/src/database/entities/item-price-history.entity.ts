@@ -26,6 +26,18 @@ export class ItemPriceHistory {
   })
   price: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => (value !== null && value !== undefined ? parseFloat(value) : null),
+    },
+  })
+  costPrice: number | null;
+
   @CreateDateColumn()
   changedAt: Date;
 }
