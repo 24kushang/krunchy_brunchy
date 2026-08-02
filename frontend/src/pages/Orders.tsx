@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -37,6 +38,7 @@ import MoveLeftIcon from '@mui/icons-material/ChevronLeft';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import EditIcon from '@mui/icons-material/Edit';
 import api from '../utils/api';
 
 const OrderStatus = {
@@ -81,6 +83,7 @@ interface Order {
 
 export default function Orders() {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0); // 0 = Kanban, 1 = Ledger
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -351,19 +354,32 @@ export default function Orders() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 150,
       sortable: false,
       renderCell: (params) => (
-        <Button
-          size="small"
-          onClick={() => {
-            setSelectedOrder(params.row);
-            setOpenDetail(true);
-          }}
-          sx={{ border: `1px solid ${theme.palette.divider}`, py: 0.2 }}
-        >
-          Inspect
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
+          <Button
+            size="small"
+            onClick={() => {
+              setSelectedOrder(params.row);
+              setOpenDetail(true);
+            }}
+            sx={{ border: `1px solid ${theme.palette.divider}`, py: 0.2, fontSize: '0.72rem' }}
+          >
+            Inspect
+          </Button>
+          <IconButton
+            size="small"
+            color="primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/orders/${params.row.id}/edit`);
+            }}
+            title="Edit Order"
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Stack>
       )
     },
   ];
@@ -826,6 +842,19 @@ export default function Orders() {
                     Mark Paid
                   </Button>
                 )}
+
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<EditIcon />}
+                  onClick={() => {
+                    setOpenDetail(false);
+                    navigate(`/orders/${selectedOrder.id}/edit`);
+                  }}
+                  sx={{ borderRadius: 2, bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' } }}
+                >
+                  Edit Order
+                </Button>
               </Stack>
 
               <Button variant="outlined" onClick={() => setOpenDetail(false)} sx={{ borderRadius: 3 }}>

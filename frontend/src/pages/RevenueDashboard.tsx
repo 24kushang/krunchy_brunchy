@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -23,6 +24,12 @@ import {
   MenuItem,
   Chip,
   TablePagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+  IconButton,
 } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -30,6 +37,8 @@ import PaidIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Schedule';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import EditIcon from '@mui/icons-material/Edit';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import {
   ResponsiveContainer,
   PieChart,
@@ -72,6 +81,12 @@ interface RevenueMetrics {
 
 export default function RevenueDashboard() {
   const theme = useTheme();
+  const navigate = useNavigate();
+
+  // Inspect Order Modal states
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [openDetail, setOpenDetail] = useState(false);
+  const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
 
   const getCurrentMonthDateRange = () => {
     const now = new Date();
@@ -137,6 +152,32 @@ export default function RevenueDashboard() {
         console.error('Failed to load revenue metrics', err);
         setLoadingMetrics(false);
       });
+  };
+
+  const handleInspectOrder = async (orderId: string) => {
+    setOpenDetail(true);
+    setLoadingOrderDetail(true);
+    try {
+      const res = await api.get(`/api/orders/${orderId}`);
+      setSelectedOrder(res.data);
+    } catch (err) {
+      console.error('Failed to fetch order details', err);
+    } finally {
+      setLoadingOrderDetail(false);
+    }
+  };
+
+  const handleSendWhatsApp = async (order: any) => {
+    if (!order?.id) return;
+    try {
+      const res = await api.post(`/api/orders/${order.id}/whatsapp-url`);
+      if (res.data && res.data.url) {
+        window.open(res.data.url, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to generate WhatsApp URL', err);
+      alert('Failed to generate WhatsApp URL. Please try again.');
+    }
   };
 
   const fetchRevenueDetails = (
@@ -658,10 +699,11 @@ export default function RevenueDashboard() {
                   <TableCell sx={{ fontWeight: 800 }}>Gross Profit</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Margin %</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Details</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 800 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {revenueDetails.map((order) => (
+                {revenueDetails.map((order: any) => (
                   <TableRow key={order.id} hover>
                     <TableCell>
                       {new Date(order.createdAt).toLocaleString()}
@@ -729,6 +771,26 @@ export default function RevenueDashboard() {
                           ? order.cashCollectionDetails || 'N/A'
                           : 'N/A'}
                       </TableCell>
+                      <TableCell align="center">
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleInspectOrder(order.id)}
+                            sx={{ py: 0.2, px: 1, fontSize: '0.72rem', borderRadius: 2 }}
+                          >
+                            Inspect
+                          </Button>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => navigate(`/orders/${order.id}/edit`)}
+                            title="Edit Order"
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
                   </TableRow>
                 ))}
 
@@ -753,6 +815,179 @@ export default function RevenueDashboard() {
           </>
         )}
       </TableContainer>
+
+      {/* Inspect Order Details Dialog */}
+      <Dialog open={openDetail} onClose={() => setOpenDetail(false)} maxWidth="sm" fullWidth>
+        {loadingOrderDetail ? (
+          <Stack direction="row" sx={{ justifyContent: 'center', py: 8 }}>
+            <CircularProgress color="primary" />
+          </Stack>
+        ) : selectedOrder && (
+          <>
+            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}`, gap: 1.5, flexWrap: 'wrap' }}>
+              <Typography variant="h5" sx={{ color: '#0A3BB0', fontWeight: 800 }}>
+                Order Details ({selectedOrder.orderNumber})
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Chip
+                  label={selectedOrder.paymentStatus || 'Unpaid'}
+                  size="small"
+                  color={selectedOrder.paymentStatus === 'Paid' ? 'success' : 'error'}
+                  sx={{ fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={selectedOrder.status || 'Pending'}
+                  size="small"
+                  color="primary"
+                  sx={{ fontWeight: 'bold' }}
+                />
+              </Stack>
+            </DialogTitle>
+            <DialogContent sx={{ py: 3 }}>
+              {/* Items Segment */}
+              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Order Items
+              </Typography>
+              <Stack spacing={1.5} sx={{ mb: 2.5 }}>
+                {selectedOrder.items?.map((item: any) => (
+                  <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.item?.name}</Typography>
+                      <Typography variant="caption" color="textSecondary">{item.quantity} x Rs. {parseFloat(item.priceAtOrder as any).toFixed(2)}</Typography>
+                    </Box>
+                    <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                      Rs. {(item.quantity * parseFloat(item.priceAtOrder as any)).toFixed(2)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Total Amount:</Typography>
+                <Typography variant="h6" color="primary" sx={{ fontWeight: 900 }}>Rs. {parseFloat(selectedOrder.totalAmount as any).toFixed(2)}</Typography>
+              </Box>
+
+              <Divider sx={{ mb: 2.5 }} />
+
+              {/* Customer Segment */}
+              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Customer Information
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 2.5 }}>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Name</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.name}</Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Contact</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact}</Typography>
+                    {selectedOrder.customer?.contact && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="success"
+                        startIcon={<WhatsAppIcon sx={{ fontSize: '0.875rem !important' }} />}
+                        onClick={() => handleSendWhatsApp(selectedOrder)}
+                        sx={{
+                          borderColor: '#25D366',
+                          color: '#25D366',
+                          '&:hover': {
+                            borderColor: '#128C7E',
+                            bgcolor: 'rgba(37, 211, 102, 0.04)',
+                          },
+                          textTransform: 'none',
+                          py: 0.1,
+                          px: 1,
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold',
+                          borderRadius: 1.5,
+                          minWidth: 0,
+                          lineHeight: 1.2
+                        }}
+                      >
+                        Send Message
+                      </Button>
+                    )}
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Date Logged</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{new Date(selectedOrder.createdAt).toLocaleString()}</Typography>
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ mb: 2.5 }} />
+
+              {/* Fulfillment & Payment Details */}
+              <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 800, mb: 1.5 }}>
+                Additional Details
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Location (City)</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.location || 'N/A'}</Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Order Source</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {typeof selectedOrder.source === 'object' ? (selectedOrder.source as any)?.name : selectedOrder.source || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Expected Delivery Date</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {selectedOrder.expectedDeliveryDate ? new Date(selectedOrder.expectedDeliveryDate).toLocaleDateString() : 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid size={6}>
+                  <Typography variant="caption" color="textSecondary">Fulfillment Hub</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {selectedOrder.fulfillmentHub?.name || 'N/A'}
+                  </Typography>
+                </Grid>
+                {selectedOrder.paymentStatus === 'Paid' && (
+                  <>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="textSecondary">Payment Mode</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.paymentMode || 'N/A'}</Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="textSecondary">Payment Recorded At</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {selectedOrder.paymentUpdatedAt ? new Date(selectedOrder.paymentUpdatedAt).toLocaleString() : 'N/A'}
+                      </Typography>
+                    </Grid>
+                    {selectedOrder.paymentMode === 'Cash' && (
+                      <Grid size={12}>
+                        <Typography variant="caption" color="textSecondary">Cash Collected At</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.cashCollectionDetails || 'N/A'}</Typography>
+                      </Grid>
+                    )}
+                  </>
+                )}
+              </Grid>
+            </DialogContent>
+            <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2, display: 'flex', justifyContent: 'space-between' }}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<EditIcon />}
+                onClick={() => {
+                  setOpenDetail(false);
+                  navigate(`/orders/${selectedOrder.id}/edit`);
+                }}
+                sx={{ borderRadius: 2, bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' } }}
+              >
+                Edit Order
+              </Button>
+              <Button variant="outlined" onClick={() => setOpenDetail(false)} sx={{ borderRadius: 3 }}>
+                Close
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 }

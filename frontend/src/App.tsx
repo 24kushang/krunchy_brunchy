@@ -11,6 +11,7 @@ import NewOrder from './pages/NewOrder';
 import OrderSources from './pages/OrderSources';
 import InventoryPlanner from './pages/InventoryPlanner';
 import RevenueDashboard from './pages/RevenueDashboard';
+import EditOrder from './pages/EditOrder';
 import Login from './pages/Login';
 import UserManagement from './pages/UserManagement';
 import AuthGuard from './components/AuthGuard';
@@ -35,6 +36,7 @@ function AppContent() {
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Navigate to="/orders" replace />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/:id/edit" element={<EditOrder />} />
         <Route path="/items" element={<Items />} />
         <Route path="/customers" element={<Customers />} />
         <Route path="/social-media" element={<SocialMedia />} />

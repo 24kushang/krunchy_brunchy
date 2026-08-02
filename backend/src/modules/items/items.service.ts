@@ -196,10 +196,10 @@ export class ItemsService {
     });
   }
 
-  /** Patch costPrice (and optionally price) on any existing history entry by its UUID. */
+  /** Patch costPrice, price, and/or changedAt timestamp on any existing history entry by its UUID. */
   async updatePriceHistoryEntry(
     entryId: string,
-    data: { costPrice?: number | null; price?: number },
+    data: { costPrice?: number | null; price?: number; changedAt?: string | Date },
   ): Promise<any> {
     const entry = await this.priceHistoryRepository.findOne({
       where: { id: entryId },
@@ -218,6 +218,9 @@ export class ItemsService {
     }
     if (data.costPrice !== undefined) {
       entry.costPrice = data.costPrice;
+    }
+    if (data.changedAt !== undefined && data.changedAt !== null) {
+      entry.changedAt = new Date(data.changedAt);
     }
     const saved = await this.priceHistoryRepository.save(entry);
     const price = parseFloat(saved.price as any);
