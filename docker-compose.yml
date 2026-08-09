@@ -12,11 +12,12 @@ services:
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     environment:
-      - DATABASE_HOST=postgres-db
-      - DATABASE_PORT=5432
-      - DATABASE_USER=admin
-      - DATABASE_PASSWORD=development_password
-      - DATABASE_NAME=oms_db
+      - DATABASE_HOST=${DATABASE_HOST:-postgres-db}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_USER=${DATABASE_USER:-admin}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-development_password}
+      - DATABASE_NAME=${DATABASE_NAME:-oms_db}
+      - DATABASE_SSL=${DATABASE_SSL:-false}
       - GOOGLE_DRIVE_FOLDER_ID=${GOOGLE_DRIVE_FOLDER_ID}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
 

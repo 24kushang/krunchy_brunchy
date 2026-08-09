@@ -22,6 +22,7 @@ export const AppDataSource = new DataSource({
   username: process.env.DATABASE_USER || 'admin',
   password: process.env.DATABASE_PASSWORD || 'development_password',
   database: process.env.DATABASE_NAME || 'oms_db',
+  ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: true } : false,
   entities: [
     Customer,
     Item,

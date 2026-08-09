@@ -29,6 +29,10 @@ import { User } from './entities/user.entity';
           'development_password',
         ),
         database: configService.get<string>('DATABASE_NAME', 'oms_db'),
+        ssl:
+          configService.get<string>('DATABASE_SSL') === 'true'
+            ? { rejectUnauthorized: true }
+            : false,
         entities: [
           Customer,
           Item,

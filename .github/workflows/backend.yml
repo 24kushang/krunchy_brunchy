@@ -43,19 +43,41 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then
             PROJECT_PATH="${{ secrets.VM_PROJECT_PATH_PROD }}"
             COMPOSE_PROJECT="kbs-prod"
+            DB_HOST="${{ secrets.PROD_DATABASE_HOST }}"
+            DB_PORT="${{ secrets.PROD_DATABASE_PORT }}"
+            DB_USER="${{ secrets.PROD_DATABASE_USER }}"
+            DB_PASSWORD="${{ secrets.PROD_DATABASE_PASSWORD }}"
+            DB_NAME="${{ secrets.PROD_DATABASE_NAME }}"
+            DB_SSL="${{ secrets.PROD_DATABASE_SSL }}"
           else
             PROJECT_PATH="${{ secrets.VM_PROJECT_PATH_DEV }}"
             COMPOSE_PROJECT="kbs-dev"
+            DB_HOST="${{ secrets.DEV_DATABASE_HOST }}"
+            DB_PORT="${{ secrets.DEV_DATABASE_PORT }}"
+            DB_USER="${{ secrets.DEV_DATABASE_USER }}"
+            DB_PASSWORD="${{ secrets.DEV_DATABASE_PASSWORD }}"
+            DB_NAME="${{ secrets.DEV_DATABASE_NAME }}"
+            DB_SSL="${{ secrets.DEV_DATABASE_SSL }}"
           fi
-          
+
           echo "Deploying branch '${{ github.ref_name }}' to '$PROJECT_PATH' with compose project '$COMPOSE_PROJECT'..."
           cd "$PROJECT_PATH"
-          
+
           echo "Updating source code..."
           git fetch origin
           git checkout ${{ github.ref_name }}
           git pull origin ${{ github.ref_name }}
-          
+
+          echo "Writing backend-api DB env for this deploy (Neon)..."
+          {
+            echo "DATABASE_HOST=$DB_HOST"
+            echo "DATABASE_PORT=$DB_PORT"
+            echo "DATABASE_USER=$DB_USER"
+            echo "DATABASE_PASSWORD=$DB_PASSWORD"
+            echo "DATABASE_NAME=$DB_NAME"
+            echo "DATABASE_SSL=$DB_SSL"
+          } > .env
+
           echo "Starting Postgres database container..."
           docker compose -p "$COMPOSE_PROJECT" -f docker-compose.db.yml up -d
           
