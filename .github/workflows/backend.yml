@@ -49,6 +49,7 @@ jobs:
             DB_PASSWORD="${{ secrets.PROD_DATABASE_PASSWORD }}"
             DB_NAME="${{ secrets.PROD_DATABASE_NAME }}"
             DB_SSL="${{ secrets.PROD_DATABASE_SSL }}"
+            ORIGINS="${{ secrets.PROD_ALLOWED_ORIGINS }}"
           else
             PROJECT_PATH="${{ secrets.VM_PROJECT_PATH_DEV }}"
             COMPOSE_PROJECT="kbs-dev"
@@ -58,6 +59,7 @@ jobs:
             DB_PASSWORD="${{ secrets.DEV_DATABASE_PASSWORD }}"
             DB_NAME="${{ secrets.DEV_DATABASE_NAME }}"
             DB_SSL="${{ secrets.DEV_DATABASE_SSL }}"
+            ORIGINS="${{ secrets.DEV_ALLOWED_ORIGINS }}"
           fi
 
           echo "Deploying branch '${{ github.ref_name }}' to '$PROJECT_PATH' with compose project '$COMPOSE_PROJECT'..."
@@ -76,6 +78,7 @@ jobs:
             echo "DATABASE_PASSWORD=$DB_PASSWORD"
             echo "DATABASE_NAME=$DB_NAME"
             echo "DATABASE_SSL=$DB_SSL"
+            echo "ALLOWED_ORIGINS=$ORIGINS"
           } > .env
 
           echo "Starting Postgres database container..."
