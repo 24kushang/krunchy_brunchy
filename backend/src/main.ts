@@ -22,7 +22,10 @@ async function bootstrap() {
   app.enableCors({
     origin: !originPatterns
       ? true // Mirrors request origin when true (required for credentials)
-      : (origin, callback) => {
+      : (
+          origin: string | undefined,
+          callback: (err: Error | null, allow?: boolean) => void,
+        ) => {
           if (!origin) return callback(null, true); // non-browser clients (curl, server-to-server)
           const allowed = originPatterns.some((re) => re.test(origin));
           callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
