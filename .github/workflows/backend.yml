@@ -43,6 +43,7 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then
             PROJECT_PATH="${{ secrets.VM_PROJECT_PATH_PROD }}"
             COMPOSE_PROJECT="kbs-prod"
+            BACKEND_PORT="3000"
             DB_HOST="${{ secrets.PROD_DATABASE_HOST }}"
             DB_PORT="${{ secrets.PROD_DATABASE_PORT }}"
             DB_USER="${{ secrets.PROD_DATABASE_USER }}"
@@ -53,6 +54,7 @@ jobs:
           else
             PROJECT_PATH="${{ secrets.VM_PROJECT_PATH_DEV }}"
             COMPOSE_PROJECT="kbs-dev"
+            BACKEND_PORT="3001"
             DB_HOST="${{ secrets.DEV_DATABASE_HOST }}"
             DB_PORT="${{ secrets.DEV_DATABASE_PORT }}"
             DB_USER="${{ secrets.DEV_DATABASE_USER }}"
@@ -72,6 +74,7 @@ jobs:
 
           echo "Writing backend-api DB env for this deploy (Neon)..."
           {
+            echo "BACKEND_PORT=$BACKEND_PORT"
             echo "DATABASE_HOST=$DB_HOST"
             echo "DATABASE_PORT=$DB_PORT"
             echo "DATABASE_USER=$DB_USER"

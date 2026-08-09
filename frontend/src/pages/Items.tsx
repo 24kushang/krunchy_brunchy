@@ -102,6 +102,20 @@ export default function Items() {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editEntryPrice, setEditEntryPrice] = useState<number | ''>('');
   const [editEntryCost, setEditEntryCost] = useState<number | ''>('');
+  const [editEntryDate, setEditEntryDate] = useState<string>('');
+
+  const formatForDateTimeInput = (isoStr?: string | null) => {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '';
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      const localDate = new Date(d.getTime() - tzOffset);
+      return localDate.toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
 
   const fetchItems = () => {
     setLoading(true);
@@ -227,12 +241,14 @@ export default function Items() {
     setEditingEntryId(entry.id);
     setEditEntryPrice(entry.price);
     setEditEntryCost(entry.costPrice !== null ? entry.costPrice : '');
+    setEditEntryDate(formatForDateTimeInput(entry.changedAt));
   };
 
   const cancelEditEntry = () => {
     setEditingEntryId(null);
     setEditEntryPrice('');
     setEditEntryCost('');
+    setEditEntryDate('');
   };
 
   const saveEditEntry = async (entryId: string) => {
@@ -240,6 +256,7 @@ export default function Items() {
     if (editEntryPrice !== '') payload.price = Number(editEntryPrice);
     if (editEntryCost !== '') payload.costPrice = Number(editEntryCost);
     else payload.costPrice = null; // explicitly clear if left blank
+    if (editEntryDate) payload.changedAt = new Date(editEntryDate).toISOString();
 
     try {
       await api.patch(`/api/items/price-history/${entryId}`, payload);
@@ -558,7 +575,17 @@ export default function Items() {
                             return (
                               <TableRow key={entry.id} hover>
                                 <TableCell sx={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                                  {new Date(entry.changedAt).toLocaleString()}
+                                  {isRowEditing ? (
+                                    <TextField
+                                      size="small"
+                                      type="datetime-local"
+                                      value={editEntryDate}
+                                      onChange={(e) => setEditEntryDate(e.target.value)}
+                                      slotProps={{ htmlInput: { style: { fontSize: '0.75rem', padding: '4px 6px' } } }}
+                                    />
+                                  ) : (
+                                    new Date(entry.changedAt).toLocaleString()
+                                  )}
                                 </TableCell>
 
                                 {isRowEditing ? (

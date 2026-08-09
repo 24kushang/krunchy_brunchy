@@ -56,7 +56,7 @@ export class ItemsController {
     return this.itemsService.update(id, body);
   }
 
-  /** Patch costPrice (and optionally price) on a specific historic price-history row. */
+  /** Patch costPrice, price, and/or changedAt timestamp on a specific historic price-history row. */
   @Patch('price-history/:entryId')
   async updatePriceHistoryEntry(
     @Param('entryId') entryId: string,
@@ -64,6 +64,7 @@ export class ItemsController {
     body: {
       costPrice?: number | null;
       price?: number;
+      changedAt?: string | Date;
     },
   ) {
     return this.itemsService.updatePriceHistoryEntry(entryId, body);

@@ -490,6 +490,253 @@ export class OrdersService {
     return this.orderRepository.save(order);
   }
 
+  /** Comprehensive Order Update Method */
+  async updateFullOrder(
+    id: string,
+    data: {
+      customerContact?: string;
+      customerName?: string;
+      customerGender?: Gender;
+      customerLocation?: string;
+      customerAddress?: string;
+      sourceId?: string | null;
+      fulfillmentHubId?: string | null;
+      expectedDeliveryDate?: string | Date | null;
+      deliveryLocation?: string | null;
+      status?: OrderStatus;
+      createdAt?: string | Date;
+      paymentStatus?: PaymentStatus;
+      paymentMode?: PaymentMode | null;
+      paymentUpdatedAt?: string | Date | null;
+      cashCollectionDetails?: string | null;
+      totalAmount?: number;
+      items?: { itemId: string; quantity: number; priceAtOrder?: number }[];
+      statusHistoryTimestamps?: { id?: string; status: OrderStatus; changedAt: string | Date; changedBy?: string }[];
+    },
+  ): Promise<Order> {
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.findOne(Order, {
+        where: { id },
+        relations: {
+          customer: true,
+          source: true,
+          fulfillmentHub: true,
+          items: { item: true },
+          statusHistory: true,
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException(`Order with ID ${id} not found`);
+      }
+
+      // 1. Update Customer Details if provided
+      if (
+        data.customerContact ||
+        data.customerName ||
+        data.customerGender ||
+        data.customerLocation ||
+        data.customerAddress !== undefined
+      ) {
+        let customer = order.customer;
+        if (data.customerContact && customer.contact !== data.customerContact) {
+          const existingContactCust = await manager.findOne(Customer, {
+            where: { contact: data.customerContact },
+          });
+          if (existingContactCust) {
+            customer = existingContactCust;
+          } else {
+            customer.contact = data.customerContact;
+          }
+        }
+        if (data.customerName) customer.name = data.customerName;
+        if (data.customerGender) customer.gender = data.customerGender;
+        if (data.customerLocation) customer.location = data.customerLocation;
+        if (data.customerAddress !== undefined)
+          customer.address = data.customerAddress || null;
+
+        await manager.save(Customer, customer);
+        order.customer = customer;
+      }
+
+      // 2. Update Order Timestamps & Core Info
+      if (data.createdAt) {
+        order.createdAt = new Date(data.createdAt);
+      }
+      if (data.expectedDeliveryDate !== undefined) {
+        order.expectedDeliveryDate = data.expectedDeliveryDate
+          ? new Date(data.expectedDeliveryDate)
+          : null;
+      }
+      if (data.deliveryLocation !== undefined) {
+        order.deliveryLocation = data.deliveryLocation || null;
+      }
+      if (data.status) {
+        order.status = data.status;
+      }
+
+      // 3. Update Payment Info & Payment Received Date
+      if (data.paymentStatus) {
+        order.paymentStatus = data.paymentStatus;
+      }
+      if (data.paymentMode !== undefined) {
+        order.paymentMode = data.paymentMode || null;
+      }
+      if (data.cashCollectionDetails !== undefined) {
+        order.cashCollectionDetails = data.cashCollectionDetails || null;
+      }
+      if (data.paymentUpdatedAt !== undefined) {
+        order.paymentUpdatedAt = data.paymentUpdatedAt
+          ? new Date(data.paymentUpdatedAt)
+          : null;
+      } else if (
+        data.paymentStatus === PaymentStatus.PAID &&
+        !order.paymentUpdatedAt
+      ) {
+        order.paymentUpdatedAt = data.createdAt
+          ? new Date(data.createdAt)
+          : new Date();
+      }
+
+      // 4. Update Source & Fulfillment Hub
+      if (data.sourceId !== undefined) {
+        if (!data.sourceId) {
+          order.source = null;
+        } else if (
+          data.sourceId.match(
+            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+          )
+        ) {
+          order.source = await manager.findOne(OrderSource, {
+            where: { id: data.sourceId },
+          });
+        } else {
+          let sourceObj = await manager.findOne(OrderSource, {
+            where: { name: data.sourceId },
+          });
+          if (!sourceObj) {
+            sourceObj = new OrderSource();
+            sourceObj.name = data.sourceId;
+            sourceObj = await manager.save(OrderSource, sourceObj);
+          }
+          order.source = sourceObj;
+        }
+      }
+
+      if (data.fulfillmentHubId !== undefined) {
+        if (!data.fulfillmentHubId) {
+          order.fulfillmentHub = null;
+        } else if (
+          data.fulfillmentHubId.match(
+            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+          )
+        ) {
+          order.fulfillmentHub = await manager.findOne(InventoryLocation, {
+            where: { id: data.fulfillmentHubId },
+          });
+        } else {
+          let hubObj = await manager.findOne(InventoryLocation, {
+            where: { name: data.fulfillmentHubId },
+          });
+          if (!hubObj) {
+            hubObj = new InventoryLocation();
+            hubObj.name = data.fulfillmentHubId;
+            hubObj = await manager.save(InventoryLocation, hubObj);
+          }
+          order.fulfillmentHub = hubObj;
+        }
+      }
+
+      // 5. Update Status Transition Timestamps (`statusHistory`)
+      if (
+        data.statusHistoryTimestamps &&
+        Array.isArray(data.statusHistoryTimestamps)
+      ) {
+        for (const item of data.statusHistoryTimestamps) {
+          if (item.id) {
+            const histRecord = await manager.findOne(OrderStatusHistory, {
+              where: { id: item.id },
+            });
+            if (histRecord) {
+              histRecord.changedAt = new Date(item.changedAt);
+              if (item.changedBy) histRecord.changedBy = item.changedBy;
+              await manager.save(OrderStatusHistory, histRecord);
+            }
+          } else {
+            const histRecord = new OrderStatusHistory();
+            histRecord.order = order;
+            histRecord.status = item.status;
+            histRecord.changedAt = new Date(item.changedAt);
+            histRecord.changedBy = item.changedBy || 'Admin';
+            await manager.save(OrderStatusHistory, histRecord);
+          }
+        }
+      }
+
+      // 6. Update Items & Prices
+      if (data.items && Array.isArray(data.items)) {
+        await manager.delete(OrderItem, { order: { id: order.id } });
+        let calculatedTotal = 0;
+        for (const itemReq of data.items) {
+          const itemObj = await manager.findOne(Item, {
+            where: { id: itemReq.itemId },
+            relations: { priceHistory: true },
+          });
+
+          if (!itemObj) {
+            throw new BadRequestException(
+              `Item with ID ${itemReq.itemId} not found`,
+            );
+          }
+
+          let priceAtOrder = 0;
+          if (
+            itemReq.priceAtOrder !== undefined &&
+            !isNaN(Number(itemReq.priceAtOrder))
+          ) {
+            priceAtOrder = parseFloat(itemReq.priceAtOrder as any);
+          } else {
+            const sortedHistory = [...itemObj.priceHistory].sort(
+              (a, b) =>
+                new Date(b.changedAt).getTime() -
+                new Date(a.changedAt).getTime(),
+            );
+            priceAtOrder =
+              sortedHistory.length > 0
+                ? parseFloat(sortedHistory[0].price as any)
+                : 0;
+          }
+
+          const orderItem = new OrderItem();
+          orderItem.order = order;
+          orderItem.item = itemObj;
+          orderItem.quantity = itemReq.quantity;
+          orderItem.priceAtOrder = priceAtOrder;
+          await manager.save(OrderItem, orderItem);
+
+          calculatedTotal += priceAtOrder * itemReq.quantity;
+        }
+
+        if (
+          data.totalAmount !== undefined &&
+          !isNaN(Number(data.totalAmount))
+        ) {
+          order.totalAmount = parseFloat(data.totalAmount as any);
+        } else {
+          order.totalAmount = Math.round(calculatedTotal * 100) / 100;
+        }
+      } else if (
+        data.totalAmount !== undefined &&
+        !isNaN(Number(data.totalAmount))
+      ) {
+        order.totalAmount = parseFloat(data.totalAmount as any);
+      }
+
+      await manager.save(Order, order);
+      return this.findOne(id);
+    });
+  }
+
   async getWhatsappUrl(
     id: string,
     status?: OrderStatus,

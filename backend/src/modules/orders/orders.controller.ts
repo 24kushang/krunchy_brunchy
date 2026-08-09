@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Param,
   Body,
@@ -113,6 +114,14 @@ export class OrdersController {
     },
   ) {
     return this.ordersService.create(body);
+  }
+
+  @Put(':id')
+  async updateFullOrder(
+    @Param('id') id: string,
+    @Body() body: any,
+  ) {
+    return this.ordersService.updateFullOrder(id, body);
   }
 
   @Patch(':id/status')
