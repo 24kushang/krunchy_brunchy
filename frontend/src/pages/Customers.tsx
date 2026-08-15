@@ -22,6 +22,7 @@ import {
   FormControlLabel,
   FormLabel,
   Divider,
+  Switch,
   useTheme
 } from '@mui/material';
 import {
@@ -52,7 +53,7 @@ import api from '../utils/api';
 interface Customer {
   id: string;
   name: string;
-  contact: string;
+  contact: string | null;
   gender: string;
   location: string;
   address?: string;
@@ -91,6 +92,8 @@ export default function Customers() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [noContact, setNoContact] = useState(false);
+  const [originalContact, setOriginalContact] = useState<string | null>(null);
   const [gender, setGender] = useState('Male');
   const [location, setLocation] = useState('');
   const [address, setAddress] = useState('');
@@ -165,6 +168,8 @@ export default function Customers() {
     setEditingId(null);
     setName('');
     setContact('');
+    setNoContact(false);
+    setOriginalContact(null);
     setGender('Male');
     setLocation('');
     setAddress('');
@@ -175,7 +180,9 @@ export default function Customers() {
     setIsEditMode(true);
     setEditingId(customer.id);
     setName(customer.name);
-    setContact(customer.contact);
+    setContact(customer.contact || '');
+    setNoContact(!customer.contact);
+    setOriginalContact(customer.contact);
     setGender(customer.gender);
     setLocation(customer.location);
     setAddress(customer.address || '');
@@ -183,12 +190,23 @@ export default function Customers() {
   };
 
   const handleSave = async () => {
-    if (!name.trim() || !contact.trim()) {
-      alert('Please fill in required name and contact fields');
+    if (!name.trim()) {
+      alert('Please fill in the required name field');
+      return;
+    }
+    if (!noContact && !contact.trim()) {
+      alert('Please fill in the contact field, or mark "Phone number not available"');
       return;
     }
 
-    const payload = { name, contact, gender, location, address };
+    const payload = {
+      name,
+      contact: noContact ? undefined : contact,
+      noContact,
+      gender,
+      location,
+      address,
+    };
 
     try {
       if (isEditMode && editingId) {
@@ -210,7 +228,11 @@ export default function Customers() {
         <Typography variant="body2" sx={{ fontWeight: 700 }}>{params.value}</Typography>
       )
     },
-    { field: 'contact', headerName: 'Contact Number', width: 140 },
+    {
+      field: 'contact', headerName: 'Contact Number', width: 140, renderCell: (params) => (
+        params.value ? params.value : <Typography variant="body2" color="textSecondary" sx={{ fontStyle: 'italic' }}>N/A</Typography>
+      )
+    },
     { field: 'gender', headerName: 'Gender', width: 100 },
     { field: 'location', headerName: 'City / Location', width: 130 },
     { field: 'address', headerName: 'Address', width: 220 },
@@ -488,9 +510,31 @@ export default function Customers() {
               fullWidth
               value={contact}
               onChange={(e) => setContact(e.target.value)}
-              disabled={isEditMode} // Enforce uniqueness database lock
-              required
+              disabled={(isEditMode && !!originalContact) || noContact} // Lock once a real contact is set; unlock to add one later
+              required={!noContact}
             />
+
+            {!(isEditMode && !!originalContact) && (
+              <FormControlLabel
+                sx={{ ml: 0, mt: -1.5 }}
+                control={
+                  <Switch
+                    size="small"
+                    checked={noContact}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setNoContact(checked);
+                      if (checked) setContact('');
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="caption" color="textSecondary">
+                    Phone number not available
+                  </Typography>
+                }
+              />
+            )}
 
             <TextField
               label="Location / City"

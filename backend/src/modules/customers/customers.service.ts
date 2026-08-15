@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Like, ILike, IsNull } from 'typeorm';
 import { Customer } from '../../database/entities/customer.entity';
 import { Gender } from '../../database/entities/enums';
 
@@ -144,36 +144,66 @@ export class CustomersService {
 
   async create(data: {
     name: string;
-    contact: string;
+    contact?: string;
+    noContact?: boolean;
     gender: Gender;
     location: string;
     address?: string;
   }): Promise<Customer> {
-    const existing = await this.customerRepository.findOne({
-      where: { contact: data.contact },
-    });
-    if (existing) {
+    const contact = data.contact?.trim() || null;
+
+    if (!contact && !data.noContact) {
       throw new ConflictException(
-        `Customer contact ${data.contact} already exists`,
+        'Contact number is required. Mark "Phone number not available" to create this customer without one.',
       );
     }
 
-    const customer = this.customerRepository.create(data);
+    if (contact) {
+      const existing = await this.customerRepository.findOne({
+        where: { contact },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `Customer contact ${contact} already exists`,
+        );
+      }
+    } else {
+      const existing = await this.customerRepository.findOne({
+        where: { contact: IsNull(), name: ILike(data.name.trim()) },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `A customer named "${data.name}" without a phone number already exists. Use that record, or add a phone number to disambiguate.`,
+        );
+      }
+    }
+
+    const customer = this.customerRepository.create({
+      name: data.name,
+      contact,
+      gender: data.gender,
+      location: data.location,
+      address: data.address,
+    });
     return this.customerRepository.save(customer);
   }
 
   async update(id: string, data: Partial<Customer>): Promise<Customer> {
     const customer = await this.findOne(id);
 
-    if (data.contact && data.contact !== customer.contact) {
-      const existing = await this.customerRepository.findOne({
-        where: { contact: data.contact },
-      });
-      if (existing) {
-        throw new ConflictException(
-          `Customer contact ${data.contact} already exists`,
-        );
+    if (data.contact !== undefined) {
+      const nextContact = data.contact?.trim() || null;
+      if (nextContact && nextContact !== customer.contact) {
+        const existing = await this.customerRepository.findOne({
+          where: { contact: nextContact },
+        });
+        if (existing) {
+          throw new ConflictException(
+            `Customer contact ${nextContact} already exists`,
+          );
+        }
       }
+      data.contact = nextContact;
     }
 
     Object.assign(customer, data);
@@ -283,7 +313,7 @@ export class CustomersService {
     ];
     const rows = customers.map((c) => [
       `"${c.name.replace(/"/g, '""')}"`,
-      `"${c.contact}"`,
+      `"${c.contact || ''}"`,
       c.gender,
       `"${c.location}"`,
       c.orderCount,

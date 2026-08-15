@@ -4,7 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Between, Like, Brackets } from 'typeorm';
+import {
+  Repository,
+  DataSource,
+  Between,
+  Like,
+  ILike,
+  IsNull,
+  Brackets,
+} from 'typeorm';
 import { Order } from '../../database/entities/order.entity';
 import { OrderItem } from '../../database/entities/order-item.entity';
 import { OrderStatusHistory } from '../../database/entities/order-status-history.entity';
@@ -181,7 +189,8 @@ export class OrdersService {
 
   // Atomic Order Upsert Transaction
   async create(data: {
-    customerContact: string;
+    customerContact?: string;
+    noContact?: boolean;
     customerName?: string;
     customerGender?: Gender;
     customerLocation?: string;
@@ -202,12 +211,24 @@ export class OrdersService {
       throw new BadRequestException('Order must contain at least one item');
     }
 
+    const contact = data.customerContact?.trim() || null;
+    if (!contact && !data.noContact) {
+      throw new BadRequestException(
+        'Customer Contact is required. Mark "Phone number not available" to create this order without one.',
+      );
+    }
+
     // Run within a database transaction block
     return this.dataSource.transaction(async (manager) => {
       // 1. Resolve or Create Customer (Atomic Upsert)
-      let customer = await manager.findOne(Customer, {
-        where: { contact: data.customerContact },
-      });
+      let customer = contact
+        ? await manager.findOne(Customer, { where: { contact } })
+        : await manager.findOne(Customer, {
+            where: {
+              contact: IsNull(),
+              name: ILike((data.customerName || '').trim()),
+            },
+          });
 
       if (!customer) {
         if (
@@ -216,12 +237,14 @@ export class OrdersService {
           !data.customerLocation
         ) {
           throw new BadRequestException(
-            'Customer contact is new. Please provide Name, Gender, and Location to create a profile.',
+            contact
+              ? 'Customer contact is new. Please provide Name, Gender, and Location to create a profile.'
+              : 'No phone number provided. Please provide Name, Gender, and Location to create a profile.',
           );
         }
 
         customer = new Customer();
-        customer.contact = data.customerContact;
+        customer.contact = contact;
         customer.name = data.customerName;
         customer.gender = data.customerGender;
         customer.location = data.customerLocation;
@@ -416,14 +439,15 @@ export class OrdersService {
         where: { id: finalizedOrder.id },
         relations: { customer: true },
       });
-      if (fullOrder) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const customerContactForLog = fullOrder?.customer.contact ?? null;
+      if (fullOrder && (customerContactForLog || !isProduction)) {
         const log = new WhatsappLog();
         log.order = fullOrder;
         log.recipientName = fullOrder.customer.name;
-        log.recipientContact =
-          process.env.NODE_ENV === 'production'
-            ? fullOrder.customer.contact
-            : process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
+        log.recipientContact = isProduction
+          ? (customerContactForLog as string)
+          : process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
         log.triggeringEvent = 'Order Created (Pending)';
         log.status = WhatsappLogStatus.PENDING;
         await manager.save(WhatsappLog, log);
@@ -539,14 +563,15 @@ export class OrdersService {
         data.customerAddress !== undefined
       ) {
         let customer = order.customer;
-        if (data.customerContact && customer.contact !== data.customerContact) {
+        const nextContact = data.customerContact?.trim();
+        if (nextContact && customer.contact !== nextContact) {
           const existingContactCust = await manager.findOne(Customer, {
-            where: { contact: data.customerContact },
+            where: { contact: nextContact },
           });
           if (existingContactCust) {
             customer = existingContactCust;
           } else {
-            customer.contact = data.customerContact;
+            customer.contact = nextContact;
           }
         }
         if (data.customerName) customer.name = data.customerName;
@@ -770,7 +795,14 @@ export class OrdersService {
     const nodeEnv = process.env.NODE_ENV || 'development';
     const fallbackNumber = process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
     const isProduction = nodeEnv === 'production';
-    const rawNumber = isProduction ? order.customer.contact : fallbackNumber;
+    if (isProduction && !order.customer.contact) {
+      throw new BadRequestException(
+        'This customer has no phone number on file, so a WhatsApp message cannot be sent.',
+      );
+    }
+    const rawNumber: string = isProduction
+      ? (order.customer.contact as string)
+      : fallbackNumber;
     const cleanedNumber = rawNumber.replace(/\D/g, '');
 
     const encodedMessage = encodeURIComponent(template);

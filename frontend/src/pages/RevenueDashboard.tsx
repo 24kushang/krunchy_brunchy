@@ -717,7 +717,7 @@ export default function RevenueDashboard() {
                           {order.customer?.name}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                          {order.customer?.contact}
+                          {order.customer?.contact || 'N/A'}
                         </Typography>
                       </Box>
                     </TableCell>
@@ -881,7 +881,7 @@ export default function RevenueDashboard() {
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Contact</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact || 'N/A'}</Typography>
                     {selectedOrder.customer?.contact && (
                       <Button
                         variant="outlined"
