@@ -66,12 +66,37 @@ interface PriceHistoryEntry {
   changedAt: string;
 }
 
-/** Color coding for margin chips */
-function marginColor(pct: number | null): 'success' | 'warning' | 'error' | 'default' {
+/** Margin level classification */
+export type MarginLevel = 'strong' | 'success' | 'warning' | 'error' | 'default';
+
+export function getMarginLevel(pct: number | null): MarginLevel {
   if (pct === null) return 'default';
-  if (pct >= 30) return 'success';
+  if (pct >= 49) return 'strong';
+  if (pct >= 25) return 'success';
   if (pct >= 10) return 'warning';
   return 'error';
+}
+
+/** Get Chip props and custom styling for margin percentage */
+export function getMarginChipProps(pct: number | null): {
+  color?: 'success' | 'warning' | 'error' | 'default' | 'primary' | 'secondary';
+  sx?: object;
+} {
+  const level = getMarginLevel(pct);
+  if (level === 'strong') {
+    return {
+      sx: {
+        bgcolor: '#6366F1', // Royal Indigo / Purple for Strong High Margin (>= 49%)
+        color: '#FFFFFF',
+        fontWeight: 700,
+        '& .MuiChip-label': { color: '#FFFFFF' },
+      },
+    };
+  }
+  if (level === 'success') return { color: 'success' };
+  if (level === 'warning') return { color: 'warning' };
+  if (level === 'error') return { color: 'error' };
+  return { color: 'default' };
 }
 
 export default function Items() {
@@ -349,9 +374,14 @@ export default function Items() {
                     <Chip
                       label={`Margin: ${item.activeMarginPercent.toFixed(1)}%`}
                       size="small"
-                      color={marginColor(item.activeMarginPercent)}
+                      {...getMarginChipProps(item.activeMarginPercent)}
                       variant="filled"
-                      sx={{ fontWeight: 700, mb: 1.5, fontSize: '0.72rem' }}
+                      sx={{
+                        fontWeight: 700,
+                        mb: 1.5,
+                        fontSize: '0.72rem',
+                        ...getMarginChipProps(item.activeMarginPercent).sx,
+                      }}
                     />
                   ) : (
                     <Chip
@@ -644,9 +674,13 @@ export default function Items() {
                                         <Chip
                                           label={`${entry.marginPercent.toFixed(1)}%`}
                                           size="small"
-                                          color={marginColor(entry.marginPercent)}
+                                          {...getMarginChipProps(entry.marginPercent)}
                                           variant="filled"
-                                          sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                                          sx={{
+                                            fontWeight: 700,
+                                            fontSize: '0.7rem',
+                                            ...getMarginChipProps(entry.marginPercent).sx,
+                                          }}
                                         />
                                       ) : (
                                         <Typography variant="caption" color="textSecondary">—</Typography>
