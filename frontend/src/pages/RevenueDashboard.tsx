@@ -33,6 +33,7 @@ import {
 } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import { getMarginChipProps } from './Items';
 import PaidIcon from '@mui/icons-material/CheckCircle';
 import PendingIcon from '@mui/icons-material/Schedule';
 import PaymentsIcon from '@mui/icons-material/Payments';
@@ -431,9 +432,9 @@ export default function RevenueDashboard() {
                         <Chip
                           label={`${metrics.overallMarginPercent.toFixed(1)}% margin`}
                           size="small"
-                          color={metrics.overallMarginPercent >= 30 ? 'success' : metrics.overallMarginPercent >= 10 ? 'warning' : 'error'}
+                          {...getMarginChipProps(metrics.overallMarginPercent)}
                           variant="filled"
-                          sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                          sx={{ fontWeight: 700, fontSize: '0.7rem', ...getMarginChipProps(metrics.overallMarginPercent).sx }}
                         />
                       )}
                     </Box>
@@ -582,7 +583,7 @@ export default function RevenueDashboard() {
                                     <Typography
                                       variant="caption"
                                       sx={{
-                                        color: pointData.marginPercent >= 30 ? '#4CAF50' : pointData.marginPercent >= 10 ? '#ff9800' : '#f44336',
+                                        color: pointData.marginPercent >= 49 ? '#6366F1' : pointData.marginPercent >= 25 ? '#4CAF50' : pointData.marginPercent >= 10 ? '#ff9800' : '#f44336',
                                         fontWeight: 800, display: 'block', mt: 0.5
                                       }}
                                     >
@@ -717,7 +718,7 @@ export default function RevenueDashboard() {
                           {order.customer?.name}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                          {order.customer?.contact}
+                          {order.customer?.contact || 'N/A'}
                         </Typography>
                       </Box>
                     </TableCell>
@@ -737,60 +738,56 @@ export default function RevenueDashboard() {
                       {order.paymentMode || 'N/A'}
                     </TableCell>
                     <TableCell sx={{ color: '#FF5A09', fontWeight: 800 }}>
-                        Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: '0.82rem' }}>
-                        {order.estimatedCost !== null && order.estimatedCost !== undefined
-                          ? `Rs. ${order.estimatedCost.toFixed(2)}`
-                          : <span style={{ color: '#9e9e9e' }}>—</span>}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
-                        {order.grossProfit !== null && order.grossProfit !== undefined ? (
-                          <span style={{ color: order.grossProfit >= 0 ? '#4caf50' : '#f44336' }}>
-                            Rs. {order.grossProfit.toFixed(2)}
-                          </span>
-                        ) : <span style={{ color: '#9e9e9e' }}>—</span>}
-                      </TableCell>
-                      <TableCell>
-                        {order.marginPercent !== null && order.marginPercent !== undefined ? (
-                          <Chip
-                            label={`${order.marginPercent.toFixed(1)}%`}
-                            size="small"
-                            color={
-                              order.marginPercent >= 30 ? 'success'
-                                : order.marginPercent >= 10 ? 'warning'
-                                : 'error'
-                            }
-                            variant="filled"
-                            sx={{ fontWeight: 700, fontSize: '0.7rem' }}
-                          />
-                        ) : <span style={{ color: '#9e9e9e' }}>—</span>}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: '0.8rem', color: 'text.secondary' }}>
-                        {order.paymentMode === 'Cash'
-                          ? order.cashCollectionDetails || 'N/A'
-                          : 'N/A'}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleInspectOrder(order.id)}
-                            sx={{ py: 0.2, px: 1, fontSize: '0.72rem', borderRadius: 2 }}
-                          >
-                            Inspect
-                          </Button>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => navigate(`/orders/${order.id}/edit`)}
-                            title="Edit Order"
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-                      </TableCell>
+                      Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '0.82rem' }}>
+                      {order.estimatedCost !== null && order.estimatedCost !== undefined
+                        ? `Rs. ${order.estimatedCost.toFixed(2)}`
+                        : <span style={{ color: '#9e9e9e' }}>—</span>}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                      {order.grossProfit !== null && order.grossProfit !== undefined ? (
+                        <span style={{ color: order.grossProfit >= 0 ? '#4caf50' : '#f44336' }}>
+                          Rs. {order.grossProfit.toFixed(2)}
+                        </span>
+                      ) : <span style={{ color: '#9e9e9e' }}>—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {order.marginPercent !== null && order.marginPercent !== undefined ? (
+                        <Chip
+                          label={`${order.marginPercent.toFixed(1)}%`}
+                          size="small"
+                          {...getMarginChipProps(order.marginPercent)}
+                          variant="filled"
+                          sx={{ fontWeight: 700, fontSize: '0.7rem', ...getMarginChipProps(order.marginPercent).sx }}
+                        />
+                      ) : <span style={{ color: '#9e9e9e' }}>—</span>}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.8rem', color: 'text.secondary' }}>
+                      {order.paymentMode === 'Cash'
+                        ? order.cashCollectionDetails || 'N/A'
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => handleInspectOrder(order.id)}
+                          sx={{ py: 0.2, px: 1, fontSize: '0.72rem', borderRadius: 2 }}
+                        >
+                          Inspect
+                        </Button>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => navigate(`/orders/${order.id}/edit`)}
+                          title="Edit Order"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
                   </TableRow>
                 ))}
 
@@ -881,7 +878,7 @@ export default function RevenueDashboard() {
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Contact</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact || 'N/A'}</Typography>
                     {selectedOrder.customer?.contact && (
                       <Button
                         variant="outlined"

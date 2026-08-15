@@ -47,7 +47,7 @@ interface Item {
 interface Customer {
   id: string;
   name: string;
-  contact: string;
+  contact: string | null;
   gender: string;
   location: string;
   address?: string;
@@ -70,6 +70,7 @@ export default function NewOrder() {
   // Editable Customer fields
   const [customerName, setCustomerName] = useState('');
   const [customerContact, setCustomerContact] = useState('');
+  const [noContact, setNoContact] = useState(false);
   const [customerGender, setCustomerGender] = useState('Male');
   const [customerLocation, setCustomerLocation] = useState('Mumbai');
   const [customerAddress, setCustomerAddress] = useState('');
@@ -167,7 +168,7 @@ export default function NewOrder() {
 
   // Debounced match for manual Contact field typing (500ms)
   useEffect(() => {
-    if (!customerContact.trim() || selectedCustomer?.contact === customerContact) {
+    if (noContact || !customerContact.trim() || selectedCustomer?.contact === customerContact) {
       return;
     }
 
@@ -196,13 +197,14 @@ export default function NewOrder() {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [customerContact, selectedCustomer]);
+  }, [customerContact, selectedCustomer, noContact]);
 
   const handleSelectCustomer = (customer: Customer | null) => {
     setSelectedCustomer(customer);
     if (customer) {
       setCustomerName(customer.name);
-      setCustomerContact(customer.contact);
+      setCustomerContact(customer.contact || '');
+      setNoContact(!customer.contact);
       setCustomerGender(customer.gender);
       setCustomerLocation(customer.location);
       setCustomerAddress(customer.address || '');
@@ -213,6 +215,7 @@ export default function NewOrder() {
     } else {
       setCustomerName('');
       setCustomerContact('');
+      setNoContact(false);
       setCustomerGender('Male');
       setCustomerLocation('');
       setCustomerAddress('');
@@ -257,8 +260,8 @@ export default function NewOrder() {
       return;
     }
 
-    if (!customerContact.trim()) {
-      setErrorMsg('Please specify Customer Contact number.');
+    if (!noContact && !customerContact.trim()) {
+      setErrorMsg('Please specify Customer Contact number, or mark "Phone number not available".');
       return;
     }
 
@@ -276,7 +279,8 @@ export default function NewOrder() {
     setErrorMsg(null);
 
     const payload: any = {
-      customerContact,
+      customerContact: noContact ? undefined : customerContact,
+      noContact,
       customerName,
       customerGender,
       customerLocation,
@@ -332,6 +336,7 @@ export default function NewOrder() {
       // Reset form states
       setCart({});
       setCustomerContact('');
+      setNoContact(false);
       setCustomerName('');
       setCustomerGender('Male');
       setCustomerLocation('');
@@ -425,7 +430,7 @@ export default function NewOrder() {
 
               <Autocomplete
                 options={customersList}
-                getOptionLabel={(option) => `${option.name} (${option.contact})`}
+                getOptionLabel={(option) => `${option.name} (${option.contact || 'No phone'})`}
                 onInputChange={(_event, newValue) => {
                   setSearchQuery(newValue);
                 }}
@@ -476,6 +481,7 @@ export default function NewOrder() {
                     label="Customer Contact Number"
                     fullWidth
                     value={customerContact}
+                    disabled={noContact}
                     onChange={(e) => {
                       setCustomerContact(e.target.value);
                       if (selectedCustomer && selectedCustomer.contact !== e.target.value) {
@@ -483,7 +489,32 @@ export default function NewOrder() {
                         setIsNewCustomer(true);
                       }
                     }}
-                    required
+                    required={!noContact}
+                  />
+                  <FormControlLabel
+                    sx={{ mt: 0.5, ml: 0 }}
+                    control={
+                      <Switch
+                        size="small"
+                        checked={noContact}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setNoContact(checked);
+                          if (checked) {
+                            setCustomerContact('');
+                            if (selectedCustomer) {
+                              setSelectedCustomer(null);
+                              setIsNewCustomer(true);
+                            }
+                          }
+                        }}
+                      />
+                    }
+                    label={
+                      <Typography variant="caption" color="textSecondary">
+                        Phone number not available
+                      </Typography>
+                    }
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>

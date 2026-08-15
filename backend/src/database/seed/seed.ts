@@ -432,7 +432,7 @@ async function seed() {
         const log = new WhatsappLog();
         log.order = savedOrder;
         log.recipientName = customer.name;
-        log.recipientContact = customer.contact;
+        log.recipientContact = customer.contact as string;
         log.triggeringEvent = 'Order Created (Pending)';
         log.status =
           Math.random() > 0.05
@@ -448,7 +448,7 @@ async function seed() {
         const log = new WhatsappLog();
         log.order = savedOrder;
         log.recipientName = customer.name;
-        log.recipientContact = customer.contact;
+        log.recipientContact = customer.contact as string;
         log.triggeringEvent = 'Ready to Deliver';
         log.status =
           Math.random() > 0.05
@@ -464,7 +464,7 @@ async function seed() {
         const log = new WhatsappLog();
         log.order = savedOrder;
         log.recipientName = customer.name;
-        log.recipientContact = customer.contact;
+        log.recipientContact = customer.contact as string;
         log.triggeringEvent = 'Order Delivered (Payment Confirmed)';
         log.status = WhatsappLogStatus.SENT;
         log.timestamp = hist.changedAt;

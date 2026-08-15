@@ -95,7 +95,8 @@ export class OrdersController {
   async create(
     @Body()
     body: {
-      customerContact: string;
+      customerContact?: string;
+      noContact?: boolean;
       customerName?: string;
       customerGender?: Gender;
       customerLocation?: string;

@@ -64,7 +64,14 @@ export class WhatsappService {
   async triggerNotification(
     order: Order,
     eventName: string,
-  ): Promise<WhatsappLog> {
+  ): Promise<WhatsappLog | null> {
+    if (!order.customer.contact) {
+      this.logger.warn(
+        `Skipping WhatsApp notification for order ${order.orderNumber}: customer has no phone number on file.`,
+      );
+      return null;
+    }
+
     const log = new WhatsappLog();
     log.order = order;
     log.recipientName = order.customer.name;

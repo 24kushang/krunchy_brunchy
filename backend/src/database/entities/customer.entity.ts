@@ -17,8 +17,8 @@ export class Customer {
   @Column({ type: 'varchar', length: 150 })
   name: string;
 
-  @Column({ type: 'varchar', length: 50, unique: true })
-  contact: string;
+  @Column({ type: 'varchar', length: 50, unique: true, nullable: true })
+  contact: string | null;
 
   @Column({ type: 'enum', enum: Gender })
   gender: Gender;

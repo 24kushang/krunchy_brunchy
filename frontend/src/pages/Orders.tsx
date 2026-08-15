@@ -67,7 +67,7 @@ interface Order {
   paymentUpdatedAt?: string;
   customer: {
     name: string;
-    contact: string;
+    contact: string | null;
     location: string;
   };
   fulfillmentHub?: { id: string; name: string } | null;
@@ -716,32 +716,34 @@ export default function Orders() {
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Contact</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact}</Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="success"
-                      startIcon={<WhatsAppIcon sx={{ fontSize: '0.875rem !important' }} />}
-                      onClick={() => handleSendWhatsApp(selectedOrder)}
-                      sx={{
-                        borderColor: '#25D366',
-                        color: '#25D366',
-                        '&:hover': {
-                          borderColor: '#128C7E',
-                          bgcolor: 'rgba(37, 211, 102, 0.04)',
-                        },
-                        textTransform: 'none',
-                        py: 0.1,
-                        px: 1,
-                        fontSize: '0.7rem',
-                        fontWeight: 'bold',
-                        borderRadius: 1.5,
-                        minWidth: 0,
-                        lineHeight: 1.2
-                      }}
-                    >
-                      Send Message
-                    </Button>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.contact || 'N/A'}</Typography>
+                    {selectedOrder.customer?.contact && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="success"
+                        startIcon={<WhatsAppIcon sx={{ fontSize: '0.875rem !important' }} />}
+                        onClick={() => handleSendWhatsApp(selectedOrder)}
+                        sx={{
+                          borderColor: '#25D366',
+                          color: '#25D366',
+                          '&:hover': {
+                            borderColor: '#128C7E',
+                            bgcolor: 'rgba(37, 211, 102, 0.04)',
+                          },
+                          textTransform: 'none',
+                          py: 0.1,
+                          px: 1,
+                          fontSize: '0.7rem',
+                          fontWeight: 'bold',
+                          borderRadius: 1.5,
+                          minWidth: 0,
+                          lineHeight: 1.2
+                        }}
+                      >
+                        Send Message
+                      </Button>
+                    )}
                   </Box>
                 </Grid>
                 <Grid size={6}>

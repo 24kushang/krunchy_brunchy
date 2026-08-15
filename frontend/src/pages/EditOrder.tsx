@@ -74,6 +74,7 @@ export default function EditOrder() {
   
   // Customer Info
   const [customerContact, setCustomerContact] = useState('');
+  const [noContact, setNoContact] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerGender, setCustomerGender] = useState('Male');
   const [customerLocation, setCustomerLocation] = useState('');
@@ -139,6 +140,7 @@ export default function EditOrder() {
         // Customer
         if (order.customer) {
           setCustomerContact(order.customer.contact || '');
+          setNoContact(!order.customer.contact);
           setCustomerName(order.customer.name || '');
           setCustomerGender(order.customer.gender || 'Male');
           setCustomerLocation(order.customer.location || '');
@@ -252,8 +254,12 @@ export default function EditOrder() {
 
   const handleSaveOrder = async () => {
     if (!id) return;
-    if (!customerName.trim() || !customerContact.trim()) {
-      setErrorMsg('Customer Name and Contact are required.');
+    if (!customerName.trim()) {
+      setErrorMsg('Customer Name is required.');
+      return;
+    }
+    if (!noContact && !customerContact.trim()) {
+      setErrorMsg('Customer Contact is required, or mark "Phone number not available".');
       return;
     }
 
@@ -396,8 +402,28 @@ export default function EditOrder() {
                       size="small"
                       fullWidth
                       value={customerContact}
+                      disabled={noContact}
                       onChange={(e) => setCustomerContact(e.target.value)}
-                      required
+                      required={!noContact}
+                    />
+                    <FormControlLabel
+                      sx={{ mt: 0.5, ml: 0 }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={noContact}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setNoContact(checked);
+                            if (checked) setCustomerContact('');
+                          }}
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" color="textSecondary">
+                          Phone number not available
+                        </Typography>
+                      }
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>

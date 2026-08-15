@@ -76,7 +76,8 @@ export class CustomersController {
     @Body()
     body: {
       name: string;
-      contact: string;
+      contact?: string;
+      noContact?: boolean;
       gender: Gender;
       location: string;
       address?: string;
