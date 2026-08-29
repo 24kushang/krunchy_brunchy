@@ -1,9 +1,48 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Enabled in dev too so "Add to Home Screen" can be tested locally,
+      // not just after a production build.
+      devOptions: { enabled: true },
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      manifest: {
+        name: 'Krunchy Brunchy OMS',
+        short_name: 'Krunchy Brunchy',
+        description: 'Internal admin-only order & customer management system for Krunchy Brunchy.',
+        start_url: '/orders',
+        display: 'standalone',
+        background_color: '#FAF6F0',
+        theme_color: '#FF5A09',
+        icons: [
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        // Precache only the static app shell (JS/CSS/fonts/icons).
+        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // Never let the service worker serve `/api/*` from cache — this is a
+        // live admin tool for orders/revenue; a stale cached response here
+        // would show wrong financial data. Requests just pass through to
+        // the network untouched, same as if there were no service worker.
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          {
+            urlPattern: /^https?:\/\/[^/]+\/api\/.*/,
+            handler: 'NetworkOnly',
+          },
+        ],
+      },
+    }),
+  ],
 
   // ─── Dev Server ────────────────────────────────────────────────────────────
   server: {

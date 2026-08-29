@@ -78,8 +78,19 @@ export class Order {
   })
   totalAmount: number;
 
-  @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
+  // No `cascade` here on purpose: OrderItem rows are always written explicitly
+  // by OrdersService (delete-then-recreate on update). Cascading writes through
+  // this relation is what caused the item-desync bug — see PR history — where
+  // saving `Order` with a stale in-memory `items` array resurrected deleted
+  // rows and orphaned freshly-inserted ones.
+  @OneToMany(() => OrderItem, (orderItem) => orderItem.order)
   items: OrderItem[];
+
+  // True when a staff member manually typed a total that differs from the
+  // sum of line items (e.g. a discount). Lets reconciliation reporting tell
+  // an intentional override apart from a genuine data-integrity issue.
+  @Column({ type: 'boolean', default: false })
+  totalAmountOverridden: boolean;
 
   @OneToMany(() => OrderStatusHistory, (history) => history.order, {
     cascade: true,

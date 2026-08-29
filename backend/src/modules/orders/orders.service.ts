@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -12,6 +13,7 @@ import {
   ILike,
   IsNull,
   Brackets,
+  EntityManager,
 } from 'typeorm';
 import { Order } from '../../database/entities/order.entity';
 import { OrderItem } from '../../database/entities/order-item.entity';
@@ -56,6 +58,56 @@ function findActivePriceHistoryForOrder(
 
   // Fallback to earliest entry
   return sorted[sorted.length - 1];
+}
+
+const TOTAL_MISMATCH_TOLERANCE = 0.01;
+
+/**
+ * Decides the order's stored total and whether it counts as a manual
+ * override. A requested total only counts as an override if it actually
+ * disagrees with what the line items add up to — otherwise it's just the
+ * client echoing back the correct number.
+ */
+function resolveOrderTotal(
+  calculatedTotal: number,
+  requestedTotal: number | undefined,
+): { totalAmount: number; overridden: boolean } {
+  const computed = Math.round(calculatedTotal * 100) / 100;
+  if (requestedTotal === undefined || isNaN(Number(requestedTotal))) {
+    return { totalAmount: computed, overridden: false };
+  }
+  const explicit = parseFloat(requestedTotal as any);
+  const overridden = Math.abs(explicit - computed) > TOTAL_MISMATCH_TOLERANCE;
+  return { totalAmount: explicit, overridden };
+}
+
+/**
+ * Belt-and-suspenders check run inside the same transaction as any write
+ * that sets an order's total: re-reads the line items as actually persisted
+ * and refuses to commit if they don't reconcile with the stored total. This
+ * exists because a previous bug (stale in-memory `order.items` cascading on
+ * save) silently desynced `order_items` from `totalAmount` — this assertion
+ * converts any future regression of that class into an immediate, loud
+ * failure instead of quietly corrupt revenue data discovered weeks later.
+ */
+async function assertItemsReconcileWithTotal(
+  manager: EntityManager,
+  orderId: string,
+  totalAmount: number,
+  overridden: boolean,
+): Promise<void> {
+  if (overridden) return;
+  const result = await manager
+    .createQueryBuilder(OrderItem, 'oi')
+    .select('COALESCE(SUM(oi.priceAtOrder * oi.quantity), 0)', 'sum')
+    .where('oi."orderId" = :orderId', { orderId })
+    .getRawOne();
+  const actualSum = parseFloat(result?.sum ?? '0');
+  if (Math.abs(actualSum - totalAmount) > TOTAL_MISMATCH_TOLERANCE) {
+    throw new InternalServerErrorException(
+      `Order total (${totalAmount.toFixed(2)}) does not reconcile with its persisted line items (${actualSum.toFixed(2)}). Aborting to prevent inconsistent data — this indicates a bug, please report it.`,
+    );
+  }
 }
 
 @Injectable()
@@ -419,12 +471,16 @@ export class OrdersService {
         totalAmount += priceAtOrder * itemRequest.quantity;
       }
 
-      if (data.totalAmount !== undefined && !isNaN(Number(data.totalAmount))) {
-        savedOrder.totalAmount = parseFloat(data.totalAmount as any);
-      } else {
-        savedOrder.totalAmount = Math.round(totalAmount * 100) / 100;
-      }
+      const resolvedTotal = resolveOrderTotal(totalAmount, data.totalAmount);
+      savedOrder.totalAmount = resolvedTotal.totalAmount;
+      savedOrder.totalAmountOverridden = resolvedTotal.overridden;
       const finalizedOrder = await manager.save(Order, savedOrder);
+      await assertItemsReconcileWithTotal(
+        manager,
+        finalizedOrder.id,
+        finalizedOrder.totalAmount,
+        finalizedOrder.totalAmountOverridden,
+      );
 
       const history = new OrderStatusHistory();
       history.order = finalizedOrder;
@@ -699,8 +755,13 @@ export class OrdersService {
       }
 
       // 6. Update Items & Prices
+      let totalWasSet = false;
       if (data.items && Array.isArray(data.items)) {
         await manager.delete(OrderItem, { order: { id: order.id } });
+        // Clear the stale in-memory collection loaded above. Order.items no
+        // longer cascades (see entity), but keeping this array in sync keeps
+        // the in-memory entity honest regardless.
+        order.items = [];
         let calculatedTotal = 0;
         for (const itemReq of data.items) {
           const itemObj = await manager.findOne(Item, {
@@ -738,26 +799,44 @@ export class OrdersService {
           orderItem.quantity = itemReq.quantity;
           orderItem.priceAtOrder = priceAtOrder;
           await manager.save(OrderItem, orderItem);
+          order.items.push(orderItem);
 
           calculatedTotal += priceAtOrder * itemReq.quantity;
         }
 
-        if (
-          data.totalAmount !== undefined &&
-          !isNaN(Number(data.totalAmount))
-        ) {
-          order.totalAmount = parseFloat(data.totalAmount as any);
-        } else {
-          order.totalAmount = Math.round(calculatedTotal * 100) / 100;
-        }
+        const resolved = resolveOrderTotal(calculatedTotal, data.totalAmount);
+        order.totalAmount = resolved.totalAmount;
+        order.totalAmountOverridden = resolved.overridden;
+        totalWasSet = true;
       } else if (
         data.totalAmount !== undefined &&
         !isNaN(Number(data.totalAmount))
       ) {
-        order.totalAmount = parseFloat(data.totalAmount as any);
+        // Items weren't touched in this update — compare the requested total
+        // against the existing (unchanged) line items to decide whether this
+        // is a genuine override or just an echo of the current total.
+        const existingSum = (order.items ?? []).reduce(
+          (sum, oi) => sum + Number(oi.priceAtOrder) * oi.quantity,
+          0,
+        );
+        const resolved = resolveOrderTotal(existingSum, data.totalAmount);
+        order.totalAmount = resolved.totalAmount;
+        order.totalAmountOverridden = resolved.overridden;
+        totalWasSet = true;
       }
 
-      await manager.save(Order, order);
+      const savedOrder = await manager.save(Order, order);
+      // Only assert when this call actually set the total — an unrelated
+      // edit (e.g. customer name) on an order with pre-existing corrupt data
+      // shouldn't be blocked by an invariant this request never touched.
+      if (totalWasSet) {
+        await assertItemsReconcileWithTotal(
+          manager,
+          savedOrder.id,
+          savedOrder.totalAmount,
+          savedOrder.totalAmountOverridden,
+        );
+      }
       return this.findOne(id);
     });
   }
@@ -1457,5 +1536,116 @@ export class OrdersService {
     }
 
     return { successCount, errors };
+  }
+
+  /**
+   * Surfaces orders whose stored `totalAmount` doesn't reconcile with the
+   * actual sum of their persisted line items, and counts orphaned
+   * `order_items` rows (orderId IS NULL) left behind by such incidents.
+   * Orders flagged `totalAmountOverridden` are excluded — a manual discount
+   * is expected to disagree with the item sum, that's not corruption.
+   */
+  async getReconciliationReport(): Promise<{
+    mismatchedOrders: {
+      id: string;
+      orderNumber: string;
+      customerName: string;
+      totalAmount: number;
+      itemsSum: number;
+      delta: number;
+      updatedAt: Date;
+      items: { itemName: string; quantity: number; priceAtOrder: number }[];
+    }[];
+    orphanedItemsCount: number;
+  }> {
+    const rows = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoin('order.customer', 'customer')
+      .leftJoin('order.items', 'oi')
+      .select('order.id', 'id')
+      .addSelect('order.orderNumber', 'orderNumber')
+      .addSelect('order.totalAmount', 'totalAmount')
+      .addSelect('order.updatedAt', 'updatedAt')
+      .addSelect('customer.name', 'customerName')
+      .addSelect(
+        'COALESCE(SUM(oi.priceAtOrder * oi.quantity), 0)',
+        'itemsSum',
+      )
+      .where('order.totalAmountOverridden = :overridden', {
+        overridden: false,
+      })
+      .groupBy('order.id')
+      .addGroupBy('customer.name')
+      .having(
+        'ABS(order.totalAmount - COALESCE(SUM(oi.priceAtOrder * oi.quantity), 0)) > :tol',
+        { tol: TOTAL_MISMATCH_TOLERANCE },
+      )
+      .orderBy('order.updatedAt', 'DESC')
+      .getRawMany();
+
+    const orderIds = rows.map((r) => r.id);
+    const itemsByOrder = new Map<
+      string,
+      { itemName: string; quantity: number; priceAtOrder: number }[]
+    >();
+    if (orderIds.length > 0) {
+      const withItems = await this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.items', 'orderItem')
+        .leftJoinAndSelect('orderItem.item', 'item')
+        .where('order.id IN (:...ids)', { ids: orderIds })
+        .getMany();
+      withItems.forEach((o) => {
+        itemsByOrder.set(
+          o.id,
+          (o.items || []).map((oi) => ({
+            itemName: oi.item?.name || 'Unknown Item',
+            quantity: oi.quantity,
+            priceAtOrder: Number(oi.priceAtOrder),
+          })),
+        );
+      });
+    }
+
+    const mismatchedOrders = rows.map((r) => {
+      const totalAmount = parseFloat(r.totalAmount);
+      const itemsSum = parseFloat(parseFloat(r.itemsSum).toFixed(2));
+      return {
+        id: r.id,
+        orderNumber: r.orderNumber,
+        customerName: r.customerName || 'Walk-in',
+        totalAmount,
+        itemsSum,
+        delta: parseFloat((totalAmount - itemsSum).toFixed(2)),
+        updatedAt: r.updatedAt,
+        items: itemsByOrder.get(r.id) || [],
+      };
+    });
+
+    const orphanedCountRows: { count: number }[] = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM order_items WHERE "orderId" IS NULL`,
+    );
+
+    return {
+      mismatchedOrders,
+      orphanedItemsCount: orphanedCountRows[0]?.count ?? 0,
+    };
+  }
+
+  /**
+   * Deletes order_items rows with no owning order. These can never be
+   * reattached (no timestamp or audit trail links them back to the order
+   * they were meant for), so removing them is pure, safe cleanup — it never
+   * risks a currently-valid order's data.
+   */
+  async cleanupOrphanedItems(): Promise<{ deletedCount: number }> {
+    // node-postgres returns `[rows, rowCount]` for a query with RETURNING,
+    // not just the rows array — index into it explicitly rather than reading
+    // `.length` off the whole result (that measures the tuple, not the rows).
+    const [, deletedCount]: [{ id: string }[], number] =
+      await this.dataSource.query(
+        `DELETE FROM order_items WHERE "orderId" IS NULL RETURNING id`,
+      );
+    return { deletedCount: deletedCount ?? 0 };
   }
 }

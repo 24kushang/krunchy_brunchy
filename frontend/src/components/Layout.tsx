@@ -32,6 +32,7 @@ import DarkModeIcon from '@mui/icons-material/Brightness4';
 import LightModeIcon from '@mui/icons-material/Brightness7';
 import ActiveIcon from '@mui/icons-material/RadioButtonChecked';
 import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useAppTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -57,9 +58,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { text: 'Order Sources', icon: <SourceIcon />, path: '/order-sources' },
   ];
 
-  // Append User Management menu option only if the user is a SuperAdmin
+  // Append SuperAdmin-only menu options
   const menuItems = user?.role === 'SuperAdmin'
-    ? [...baseMenuItems, { text: 'User Management', icon: <SupervisorAccountIcon />, path: '/users' }]
+    ? [
+        ...baseMenuItems,
+        { text: 'Data Integrity', icon: <WarningAmberIcon />, path: '/data-integrity' },
+        { text: 'User Management', icon: <SupervisorAccountIcon />, path: '/users' },
+      ]
     : baseMenuItems;
 
   const handleDrawerToggle = () => {

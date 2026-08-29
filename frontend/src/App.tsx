@@ -14,6 +14,7 @@ import RevenueDashboard from './pages/RevenueDashboard';
 import EditOrder from './pages/EditOrder';
 import Login from './pages/Login';
 import UserManagement from './pages/UserManagement';
+import DataIntegrity from './pages/DataIntegrity';
 import AuthGuard from './components/AuthGuard';
 
 function ProtectedLayout() {
@@ -47,13 +48,23 @@ function AppContent() {
         <Route path="/revenue" element={<RevenueDashboard />} />
         
         {/* User Management Route (Only accessible to SuperAdmin) */}
-        <Route 
-          path="/users" 
+        <Route
+          path="/users"
           element={
             <AuthGuard allowedRoles={['SuperAdmin']}>
               <UserManagement />
             </AuthGuard>
-          } 
+          }
+        />
+
+        {/* Data Integrity Route (Only accessible to SuperAdmin) */}
+        <Route
+          path="/data-integrity"
+          element={
+            <AuthGuard allowedRoles={['SuperAdmin']}>
+              <DataIntegrity />
+            </AuthGuard>
+          }
         />
       </Route>
 

@@ -14,11 +14,25 @@ import {
   Gender,
   PaymentStatus,
   PaymentMode,
+  UserRole,
 } from '../../database/entities/enums';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('api/orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
+  @Roles(UserRole.SUPER_ADMIN)
+  @Get('reconciliation')
+  async getReconciliationReport() {
+    return this.ordersService.getReconciliationReport();
+  }
+
+  @Roles(UserRole.SUPER_ADMIN)
+  @Post('reconciliation/cleanup-orphaned')
+  async cleanupOrphanedItems() {
+    return this.ordersService.cleanupOrphanedItems();
+  }
 
   @Get()
   async findAll(
