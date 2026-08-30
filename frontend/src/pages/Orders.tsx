@@ -115,7 +115,7 @@ export default function Orders() {
   const [whatsappPromptOpen, setWhatsappPromptOpen] = useState(false);
   const [whatsappPromptOrderId, setWhatsappPromptOrderId] = useState('');
   const [whatsappPromptOrderNumber, setWhatsappPromptOrderNumber] = useState('');
-  const [whatsappPromptStatus, setWhatsappPromptStatus] = useState<OrderStatus | ''>('');
+  const [whatsappPromptStatus, setWhatsappPromptStatus] = useState<OrderStatus | 'Payment Received' | ''>('');
 
   // Fetch orders (Ledger vs Kanban)
   const fetchOrders = (silent = false) => {
@@ -226,6 +226,7 @@ export default function Orders() {
     if (!paymentOrder) return;
     setPaymentSubmitting(true);
     try {
+      const wasAlreadyPaid = paymentOrder.paymentStatus === 'Paid';
       await api.patch(`/api/orders/${paymentOrder.id}/payment`, {
         paymentStatus,
         paymentMode: paymentStatus === 'Paid' ? paymentMode : undefined,
@@ -238,6 +239,14 @@ export default function Orders() {
       if (selectedOrder && selectedOrder.id === paymentOrder.id) {
         const res = await api.get(`/api/orders/${paymentOrder.id}`);
         setSelectedOrder(res.data);
+      }
+
+      // Payment just marked as Paid: offer to send the payment-received WhatsApp message
+      if (paymentStatus === 'Paid' && !wasAlreadyPaid) {
+        setWhatsappPromptOrderId(paymentOrder.id);
+        setWhatsappPromptOrderNumber(paymentOrder.orderNumber || 'Order');
+        setWhatsappPromptStatus('Payment Received');
+        setWhatsappPromptOpen(true);
       }
     } catch (err) {
       console.error('Failed to update payment', err);
@@ -939,8 +948,12 @@ export default function Orders() {
         </DialogTitle>
         <DialogContent sx={{ py: 3 }}>
           <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
-            Order <strong>{whatsappPromptOrderNumber}</strong> has transitioned to <strong>{whatsappPromptStatus}</strong>.
-            Would you like to send the manual WhatsApp alert now, or skip to log it as pending?
+            {whatsappPromptStatus === 'Payment Received' ? (
+              <>Payment for order <strong>{whatsappPromptOrderNumber}</strong> has been marked as received.</>
+            ) : (
+              <>Order <strong>{whatsappPromptOrderNumber}</strong> has transitioned to <strong>{whatsappPromptStatus}</strong>.</>
+            )}
+            {' '}Would you like to send the manual WhatsApp alert now, or skip to log it as pending?
           </Typography>
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
