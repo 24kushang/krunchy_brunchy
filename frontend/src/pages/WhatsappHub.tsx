@@ -114,6 +114,8 @@ export default function WhatsappHub() {
       status = 'Ready to Deliver';
     } else if (triggeringEvent === 'Order Delivered (Payment Confirmed)') {
       status = 'Delivered';
+    } else if (triggeringEvent === 'Payment Received (Pending)') {
+      status = 'Payment Received';
     }
 
     try {

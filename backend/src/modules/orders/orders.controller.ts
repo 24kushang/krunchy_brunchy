@@ -169,7 +169,7 @@ export class OrdersController {
   @Post(':id/whatsapp-url')
   async getWhatsappUrl(
     @Param('id') id: string,
-    @Body() body?: { status?: OrderStatus },
+    @Body() body?: { status?: OrderStatus | 'Payment Received' },
   ) {
     return this.ordersService.getWhatsappUrl(id, body?.status);
   }

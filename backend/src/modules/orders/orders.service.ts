@@ -554,6 +554,7 @@ export class OrdersService {
     cashDetails?: string,
   ): Promise<Order> {
     const order = await this.findOne(id);
+    const wasAlreadyPaid = order.paymentStatus === PaymentStatus.PAID;
     order.paymentStatus = paymentStatus;
 
     if (paymentStatus === PaymentStatus.PAID) {
@@ -567,7 +568,26 @@ export class OrdersService {
       order.paymentUpdatedAt = null;
     }
 
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (
+      paymentStatus === PaymentStatus.PAID &&
+      !wasAlreadyPaid &&
+      (order.customer.contact || !isProduction)
+    ) {
+      const log = new WhatsappLog();
+      log.order = savedOrder;
+      log.recipientName = order.customer.name;
+      log.recipientContact = isProduction
+        ? (order.customer.contact as string)
+        : process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
+      log.triggeringEvent = 'Payment Received (Pending)';
+      log.status = WhatsappLogStatus.PENDING;
+      await this.whatsappService.saveLog(log);
+    }
+
+    return savedOrder;
   }
 
   /** Comprehensive Order Update Method */
@@ -843,7 +863,7 @@ export class OrdersService {
 
   async getWhatsappUrl(
     id: string,
-    status?: OrderStatus,
+    status?: OrderStatus | 'Payment Received',
   ): Promise<{ url: string }> {
     const order = await this.findOne(id);
     const targetStatus = status || order.status;
@@ -853,21 +873,32 @@ export class OrdersService {
     const customerName = order.customer.name;
     const orderNumber = order.orderNumber;
     const totalAmount = parseFloat(order.totalAmount as any).toFixed(2);
+    const itemsSummary = order.items
+      .map((orderItem, index) => {
+        const lineTotal = (
+          orderItem.quantity * Number(orderItem.priceAtOrder)
+        ).toFixed(2);
+        return `${index + 1}. ${orderItem.item.name} x${orderItem.quantity} - Rs. ${lineTotal}`;
+      })
+      .join('\n');
 
     if (targetStatus === OrderStatus.PENDING) {
-      template = `Hi ${customerName}, thank you for ordering with Krunchy Brunchy! Your order #${orderNumber} has been successfully created. Total: Rs. ${totalAmount}.`;
+      template = `Hi ${customerName}, thank you for ordering with Krunchy Brunchy!\n\n*Order #${orderNumber}*\n${itemsSummary}\n\n*Total: Rs. ${totalAmount}*\n\nThanks for ordering! Your order will be prepared and delivered shortly.`;
       triggeringEvent = 'Manual Send - Order Created';
     } else if (targetStatus === OrderStatus.READY_TO_DELIVER) {
-      template = `Hi ${customerName}, your Krunchy Brunchy order #${orderNumber} has been shipped! Total Amount: Rs. ${totalAmount}.`;
+      template = `Hi ${customerName}, your Krunchy Brunchy order #${orderNumber} has been shipped!\n\n*Order #${orderNumber}*\n${itemsSummary}\n\n*Total Amount: Rs. ${totalAmount}*`;
       triggeringEvent = 'Manual Send - Order Shipped';
     } else if (targetStatus === OrderStatus.DELIVERED) {
-      template = `Hi ${customerName}, your Krunchy Brunchy order #${orderNumber} has been successfully delivered! Thank you for your purchase. Total: Rs. ${totalAmount}.`;
+      template = `Hi ${customerName}, your Krunchy Brunchy order #${orderNumber} has been successfully delivered!\n\n*Order #${orderNumber}*\n${itemsSummary}\n\n*Total: Rs. ${totalAmount}*\n\nThank you for your purchase. Crunch on!`;
       triggeringEvent = 'Manual Send - Order Delivered';
+    } else if (targetStatus === 'Payment Received') {
+      template = `Hi ${customerName}, we've received your payment for order #${orderNumber}!\n\n${itemsSummary}\n\n*Amount Paid: Rs. ${totalAmount}*\n\nThank you for choosing Krunchy Brunchy!`;
+      triggeringEvent = 'Manual Send - Payment Received';
     } else if (targetStatus === OrderStatus.PREPARING) {
-      template = `Hi ${customerName}, we have started preparing your Krunchy Brunchy order #${orderNumber}! Total: Rs. ${totalAmount}.`;
+      template = `Hi ${customerName}, we have started preparing your Krunchy Brunchy order #${orderNumber}!\n\n${itemsSummary}\n\n*Total: Rs. ${totalAmount}*`;
       triggeringEvent = 'Manual Send - Order Preparing';
     } else {
-      template = `Hi ${customerName}, updating you regarding your Krunchy Brunchy order #${orderNumber}. Total: Rs. ${totalAmount}.`;
+      template = `Hi ${customerName}, updating you regarding your Krunchy Brunchy order #${orderNumber}.\n\n${itemsSummary}\n\n*Total: Rs. ${totalAmount}*`;
       triggeringEvent = `Manual Send - ${targetStatus}`;
     }
 
@@ -891,6 +922,7 @@ export class OrdersService {
     if (targetStatus === OrderStatus.PENDING) pendingTriggerEvent = 'Order Created (Pending)';
     else if (targetStatus === OrderStatus.READY_TO_DELIVER) pendingTriggerEvent = 'Ready to Deliver';
     else if (targetStatus === OrderStatus.DELIVERED) pendingTriggerEvent = 'Order Delivered (Payment Confirmed)';
+    else if (targetStatus === 'Payment Received') pendingTriggerEvent = 'Payment Received (Pending)';
 
     let log = null;
     if (pendingTriggerEvent) {
