@@ -223,7 +223,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           color: theme.palette.text.primary,
           borderBottom: `1px solid ${mode === 'light' ? '#EFEAE4' : '#2C2A28'}`,
           backdropFilter: 'blur(8px)',
-          backgroundImage: 'none'
+          backgroundImage: 'none',
+          pt: 'env(safe-area-inset-top, 0px)', // iOS Safe Area notch inset
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 } }}>
@@ -298,7 +299,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth, borderRight: 'none' } }}
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: drawerWidth,
+              borderRight: 'none',
+              pt: 'env(safe-area-inset-top, 0px)', // iOS Safe Area notch inset
+            }
+          }}
         >
           {drawerContent}
         </Drawer>
@@ -324,7 +331,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           flexGrow: 1,
           p: { xs: 2, sm: 3, md: 4 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px',
+          mt: 'calc(64px + env(safe-area-inset-top, 0px))',
           overflowX: 'hidden'
         }}
       >

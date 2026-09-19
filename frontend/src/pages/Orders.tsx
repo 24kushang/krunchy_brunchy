@@ -224,6 +224,11 @@ export default function Orders() {
   // Update order payment status
   const handleUpdatePayment = async () => {
     if (!paymentOrder) return;
+    if (paymentOrder.status === OrderStatus.CANCELLED) {
+      alert('Payment status cannot be updated for cancelled orders.');
+      setOpenPaymentDialog(false);
+      return;
+    }
     setPaymentSubmitting(true);
     try {
       const wasAlreadyPaid = paymentOrder.paymentStatus === 'Paid';
@@ -323,7 +328,7 @@ export default function Orders() {
               variant={isPaid ? 'filled' : 'outlined'}
               sx={{ fontWeight: 'bold' }}
             />
-            {!isPaid && (
+            {!isPaid && params.row.status !== OrderStatus.CANCELLED && (
               <IconButton
                 size="small"
                 color="primary"
@@ -835,7 +840,7 @@ export default function Orders() {
                   </FormControl>
                 )}
 
-                {selectedOrder.paymentStatus !== 'Paid' && (
+                {selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== OrderStatus.CANCELLED && (
                   <Button
                     variant="contained"
                     color="success"

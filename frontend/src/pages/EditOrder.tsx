@@ -13,6 +13,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  FormHelperText,
   CircularProgress,
   Alert,
   Divider,
@@ -528,7 +529,15 @@ export default function EditOrder() {
                       <Select
                         value={orderStatus}
                         label="Order Status"
-                        onChange={(e) => setOrderStatus(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setOrderStatus(val);
+                          if (val === 'Cancelled') {
+                            setPaymentStatus('Unpaid');
+                            setPaymentUpdatedAt('');
+                            setCashCollectionDetails('');
+                          }
+                        }}
                       >
                         <MenuItem value="Pending">Pending</MenuItem>
                         <MenuItem value="Preparing">Preparing</MenuItem>
@@ -627,21 +636,24 @@ export default function EditOrder() {
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormControl fullWidth size="small">
+                    <FormControl fullWidth size="small" disabled={orderStatus === 'Cancelled'}>
                       <InputLabel>Payment Status</InputLabel>
                       <Select
-                        value={paymentStatus}
+                        value={orderStatus === 'Cancelled' ? 'Unpaid' : paymentStatus}
                         label="Payment Status"
                         onChange={(e) => setPaymentStatus(e.target.value)}
                       >
                         <MenuItem value="Paid">Paid</MenuItem>
                         <MenuItem value="Unpaid">Unpaid</MenuItem>
                       </Select>
+                      {orderStatus === 'Cancelled' && (
+                        <FormHelperText error>Payment is disabled for cancelled orders.</FormHelperText>
+                      )}
                     </FormControl>
                   </Grid>
 
                   <Grid size={{ xs: 12, sm: 6 }}>
-                    <FormControl fullWidth size="small" disabled={paymentStatus !== 'Paid'}>
+                    <FormControl fullWidth size="small" disabled={paymentStatus !== 'Paid' || orderStatus === 'Cancelled'}>
                       <InputLabel>Payment Mode</InputLabel>
                       <Select
                         value={paymentMode}
@@ -662,7 +674,7 @@ export default function EditOrder() {
                       label="Payment Received Timestamp"
                       size="small"
                       fullWidth
-                      disabled={paymentStatus !== 'Paid'}
+                      disabled={paymentStatus !== 'Paid' || orderStatus === 'Cancelled'}
                       slotProps={{ inputLabel: { shrink: true } }}
                       value={paymentUpdatedAt}
                       onChange={(e) => setPaymentUpdatedAt(e.target.value)}
