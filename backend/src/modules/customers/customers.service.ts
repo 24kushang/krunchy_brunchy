@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, ILike, IsNull } from 'typeorm';
 import { Customer } from '../../database/entities/customer.entity';
-import { Gender } from '../../database/entities/enums';
+import { Gender, OrderStatus } from '../../database/entities/enums';
 
 @Injectable()
 export class CustomersService {
@@ -56,7 +56,9 @@ export class CustomersService {
     // 2. Build Data Query
     const qb = this.customerRepository
       .createQueryBuilder('customer')
-      .leftJoin('customer.orders', 'order')
+      .leftJoin('customer.orders', 'order', 'order.status != :cancelledStatus', {
+        cancelledStatus: OrderStatus.CANCELLED,
+      })
       .select([
         'customer.id AS id',
         'customer.name AS name',
@@ -216,9 +218,15 @@ export class CustomersService {
   }
 
   async getMetrics(): Promise<any> {
-    const customers = await this.customerRepository.find({
-      relations: { orders: true },
-    });
+    const customers = await this.customerRepository
+      .createQueryBuilder('customer')
+      .leftJoinAndSelect(
+        'customer.orders',
+        'order',
+        'order.status != :cancelledStatus',
+        { cancelledStatus: OrderStatus.CANCELLED },
+      )
+      .getMany();
 
     // 1. Regional Hubs
     const regions: Record<string, { count: number; totalSales: number }> = {};

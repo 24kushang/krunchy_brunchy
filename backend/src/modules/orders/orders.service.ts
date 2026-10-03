@@ -520,6 +520,12 @@ export class OrdersService {
   ): Promise<Order> {
     const order = await this.findOne(id);
     order.status = newStatus;
+    if (newStatus === OrderStatus.CANCELLED) {
+      order.paymentStatus = PaymentStatus.UNPAID;
+      order.paymentMode = null;
+      order.cashCollectionDetails = null;
+      order.paymentUpdatedAt = null;
+    }
     await this.orderRepository.save(order);
 
     const history = this.statusHistoryRepository.create({
@@ -554,6 +560,11 @@ export class OrdersService {
     cashDetails?: string,
   ): Promise<Order> {
     const order = await this.findOne(id);
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException(
+        'Payment status cannot be updated for cancelled orders.',
+      );
+    }
     const wasAlreadyPaid = order.paymentStatus === PaymentStatus.PAID;
     order.paymentStatus = paymentStatus;
 
@@ -697,6 +708,13 @@ export class OrdersService {
         order.paymentUpdatedAt = data.createdAt
           ? new Date(data.createdAt)
           : new Date();
+      }
+
+      if (order.status === OrderStatus.CANCELLED) {
+        order.paymentStatus = PaymentStatus.UNPAID;
+        order.paymentMode = null;
+        order.cashCollectionDetails = null;
+        order.paymentUpdatedAt = null;
       }
 
       // 4. Update Source & Fulfillment Hub
@@ -992,6 +1010,9 @@ export class OrdersService {
         .where('order.paymentStatus = :paidStatus', {
           paidStatus: PaymentStatus.PAID,
         })
+        .andWhere('order.status != :cancelledStatus', {
+          cancelledStatus: OrderStatus.CANCELLED,
+        })
         .andWhere(
           'COALESCE(order.paymentUpdatedAt, order.createdAt) BETWEEN :start AND :end',
           { start, end },
@@ -1019,6 +1040,9 @@ export class OrdersService {
         ])
         .where('order.paymentStatus = :unpaidStatus', {
           unpaidStatus: PaymentStatus.UNPAID,
+        })
+        .andWhere('order.status != :cancelledStatus', {
+          cancelledStatus: OrderStatus.CANCELLED,
         })
         .andWhere('order.createdAt BETWEEN :start AND :end', {
           start,
@@ -1275,6 +1299,10 @@ export class OrdersService {
     if (query.endDate) {
       end.setHours(23, 59, 59, 999);
     }
+
+    qb.andWhere('order.status != :cancelledStatus', {
+      cancelledStatus: OrderStatus.CANCELLED,
+    });
 
     qb.andWhere(
       '((order.paymentStatus = :paidStatus AND COALESCE(order.paymentUpdatedAt, order.createdAt) BETWEEN :start AND :end) OR (order.paymentStatus = :unpaidStatus AND order.createdAt BETWEEN :start AND :end))',
