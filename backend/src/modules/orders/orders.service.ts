@@ -495,7 +495,8 @@ export class OrdersService {
         where: { id: finalizedOrder.id },
         relations: { customer: true },
       });
-      const isProduction = process.env.NODE_ENV === 'production';
+      const nodeEnv = (process.env.NODE_ENV || 'development').trim().toLowerCase();
+      const isProduction = nodeEnv === 'production' || nodeEnv === 'prod';
       const customerContactForLog = fullOrder?.customer.contact ?? null;
       if (fullOrder && (customerContactForLog || !isProduction)) {
         const log = new WhatsappLog();
@@ -581,7 +582,8 @@ export class OrdersService {
 
     const savedOrder = await this.orderRepository.save(order);
 
-    const isProduction = process.env.NODE_ENV === 'production';
+    const nodeEnv = (process.env.NODE_ENV || 'development').trim().toLowerCase();
+    const isProduction = nodeEnv === 'production' || nodeEnv === 'prod';
     if (
       paymentStatus === PaymentStatus.PAID &&
       !wasAlreadyPaid &&
@@ -920,9 +922,9 @@ export class OrdersService {
       triggeringEvent = `Manual Send - ${targetStatus}`;
     }
 
-    const nodeEnv = process.env.NODE_ENV || 'development';
+    const nodeEnv = (process.env.NODE_ENV || 'development').trim().toLowerCase();
     const fallbackNumber = process.env.WHATSAPP_FALLBACK_NUMBER || '919876543210';
-    const isProduction = nodeEnv === 'production';
+    const isProduction = nodeEnv === 'production' || nodeEnv === 'prod';
     if (isProduction && !order.customer.contact) {
       throw new BadRequestException(
         'This customer has no phone number on file, so a WhatsApp message cannot be sent.',
@@ -931,7 +933,12 @@ export class OrdersService {
     const rawNumber: string = isProduction
       ? (order.customer.contact as string)
       : fallbackNumber;
-    const cleanedNumber = rawNumber.replace(/\D/g, '');
+    let cleanedNumber = rawNumber.replace(/\D/g, '');
+    if (cleanedNumber.length === 10) {
+      cleanedNumber = `91${cleanedNumber}`;
+    } else if (cleanedNumber.length === 11 && cleanedNumber.startsWith('0')) {
+      cleanedNumber = `91${cleanedNumber.slice(1)}`;
+    }
 
     const encodedMessage = encodeURIComponent(template);
     const url = `https://wa.me/${cleanedNumber}?text=${encodedMessage}`;

@@ -12,6 +12,8 @@ services:
     ports:
       - "${BACKEND_PORT:-3001}:3000"
     environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - WHATSAPP_FALLBACK_NUMBER=${WHATSAPP_FALLBACK_NUMBER:-919876543210}
       - DATABASE_HOST=${DATABASE_HOST:-postgres-db}
       - DATABASE_PORT=${DATABASE_PORT:-5432}
       - DATABASE_USER=${DATABASE_USER:-admin}
