@@ -67,6 +67,7 @@ jobs:
             DB_NAME="${{ secrets.DEV_DATABASE_NAME }}"
             DB_SSL="${{ secrets.DEV_DATABASE_SSL }}"
             ORIGINS="${{ secrets.DEV_ALLOWED_ORIGINS }}"
+            NODE_ENV=develop
           fi
 
           echo "Deploying branch '${{ github.ref_name }}' to '$PROJECT_PATH' with compose project '$COMPOSE_PROJECT'..."
@@ -89,6 +90,7 @@ jobs:
             echo "DATABASE_NAME=$DB_NAME"
             echo "DATABASE_SSL=$DB_SSL"
             echo "ALLOWED_ORIGINS=$ORIGINS"
+            echo "NODE_ENV=$NODE_ENV"
           } > .env
 
           echo "Starting Postgres database container..."
