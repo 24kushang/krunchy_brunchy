@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -30,6 +30,8 @@ import {
   DialogActions,
   Divider,
   IconButton,
+  Link as MuiLink,
+  Alert,
 } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -82,12 +84,14 @@ interface RevenueMetrics {
 
 export default function RevenueDashboard() {
   const theme = useTheme();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
 
   // Inspect Order Modal states
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
   const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const getCurrentMonthDateRange = () => {
     const now = new Date();
@@ -111,62 +115,87 @@ export default function RevenueDashboard() {
 
   const { start: defaultStart, end: defaultEnd } = getCurrentMonthDateRange();
 
+  // URL-backed applied filters & pagination & modal
+  const appliedStartDate = searchParams.get('from') || defaultStart;
+  const appliedEndDate = searchParams.get('to') || defaultEnd;
+  const appliedPaymentMode = searchParams.get('mode') || 'ALL';
+  const appliedPaymentStatus = searchParams.get('status') || 'ALL';
+  const rawTrend = searchParams.get('trend');
+  const trendMode: 'daily' | 'monthly' | 'quarterly' | 'yearly' =
+    rawTrend === 'monthly' || rawTrend === 'quarterly' || rawTrend === 'yearly'
+      ? rawTrend
+      : 'daily';
+  const page = Math.max(0, (parseInt(searchParams.get('page') || '1', 10) || 1) - 1);
+  const rawLimit = parseInt(searchParams.get('limit') || '10', 10);
+  const rowsPerPage = [5, 10, 20].includes(rawLimit) ? rawLimit : 10;
+  const inspectOrderId = searchParams.get('inspect');
+
   const [metrics, setMetrics] = useState<RevenueMetrics | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(true);
 
-  // Filter States
-  const [startDate, setStartDate] = useState(defaultStart);
-  const [endDate, setEndDate] = useState(defaultEnd);
-  const [paymentMode, setPaymentMode] = useState('ALL');
-  const [paymentStatus, setPaymentStatus] = useState('ALL');
-
-  // Trend Grouping state
-  const [trendMode, setTrendMode] = useState<'daily' | 'monthly' | 'quarterly' | 'yearly'>('daily');
+  // Draft Filter States (committed on Apply)
+  const [startDate, setStartDate] = useState(appliedStartDate);
+  const [endDate, setEndDate] = useState(appliedEndDate);
+  const [paymentMode, setPaymentMode] = useState(appliedPaymentMode);
+  const [paymentStatus, setPaymentStatus] = useState(appliedPaymentStatus);
 
   // Paginated details states
   const [revenueDetails, setRevenueDetails] = useState<any[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(true);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalRows, setTotalRows] = useState(0);
 
-  const fetchRevenueMetrics = (
-    sDate = startDate,
-    eDate = endDate,
-    type = trendMode,
-    pMode = paymentMode,
-    pStatus = paymentStatus
-  ) => {
-    setLoadingMetrics(true);
-    const params: Record<string, string> = { type };
-    if (sDate) params.startDate = sDate;
-    if (eDate) params.endDate = eDate;
-    if (pMode !== 'ALL') params.paymentMode = pMode;
-    if (pStatus !== 'ALL') params.paymentStatus = pStatus;
-
-    api.get('/api/orders/metrics/revenue', { params })
-      .then((res) => {
-        setMetrics(res.data);
-        setLoadingMetrics(false);
-      })
-      .catch((err) => {
-        console.error('Failed to load revenue metrics', err);
-        setLoadingMetrics(false);
+  const buildRevenueParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(overrides).forEach(([key, val]) => {
+        if (
+          val === null ||
+          val === undefined ||
+          val === '' ||
+          (key === 'mode' && val === 'ALL') ||
+          (key === 'status' && val === 'ALL') ||
+          (key === 'trend' && val === 'daily') ||
+          (key === 'page' && val === '1') ||
+          (key === 'limit' && val === '10')
+        ) {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
       });
+      return next;
+    },
+    [searchParams]
+  );
+
+  const buildRevenueUrl = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildRevenueParams(overrides);
+      const qs = next.toString();
+      return qs ? `/revenue?${qs}` : '/revenue';
+    },
+    [buildRevenueParams]
+  );
+
+  const updateRevenueParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      setSearchParams(buildRevenueParams(overrides));
+    },
+    [buildRevenueParams, setSearchParams]
+  );
+
+  const getCustomerSearchUrl = (customer?: { contact?: string | null; name?: string } | null) => {
+    const q = customer?.contact || customer?.name || '';
+    return q ? `/customers?search=${encodeURIComponent(q)}` : '/customers';
   };
 
-  const handleInspectOrder = async (orderId: string) => {
-    setOpenDetail(true);
-    setLoadingOrderDetail(true);
-    try {
-      const res = await api.get(`/api/orders/${orderId}`);
-      setSelectedOrder(res.data);
-    } catch (err) {
-      console.error('Failed to fetch order details', err);
-    } finally {
-      setLoadingOrderDetail(false);
-    }
-  };
+  // Sync draft form controls when URL filters change (e.g. Reset or Back/Forward)
+  useEffect(() => {
+    setStartDate(appliedStartDate);
+    setEndDate(appliedEndDate);
+    setPaymentMode(appliedPaymentMode);
+    setPaymentStatus(appliedPaymentStatus);
+  }, [appliedStartDate, appliedEndDate, appliedPaymentMode, appliedPaymentStatus]);
 
   const handleSendWhatsApp = async (order: any) => {
     if (!order?.id) return;
@@ -181,79 +210,129 @@ export default function RevenueDashboard() {
     }
   };
 
-  const fetchRevenueDetails = (
-    curPage = page,
-    curLimit = rowsPerPage,
-    sDate = startDate,
-    eDate = endDate,
-    pMode = paymentMode,
-    pStatus = paymentStatus
-  ) => {
+  // Fetch Metrics whenever applied filters or trendMode change
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingMetrics(true);
+    const params: Record<string, string> = { type: trendMode };
+    if (appliedStartDate) params.startDate = appliedStartDate;
+    if (appliedEndDate) params.endDate = appliedEndDate;
+    if (appliedPaymentMode !== 'ALL') params.paymentMode = appliedPaymentMode;
+    if (appliedPaymentStatus !== 'ALL') params.paymentStatus = appliedPaymentStatus;
+
+    api.get('/api/orders/metrics/revenue', { params })
+      .then((res) => {
+        if (!cancelled) {
+          setMetrics(res.data);
+          setLoadingMetrics(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load revenue metrics', err);
+        if (!cancelled) setLoadingMetrics(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedStartDate, appliedEndDate, trendMode, appliedPaymentMode, appliedPaymentStatus]);
+
+  // Fetch Paginated Details whenever applied filters or pagination change
+  useEffect(() => {
+    let cancelled = false;
     setLoadingDetails(true);
     const params: Record<string, any> = {
-      page: curPage + 1,
-      limit: curLimit
+      page: page + 1,
+      limit: rowsPerPage
     };
-    if (sDate) params.startDate = sDate;
-    if (eDate) params.endDate = eDate;
-    if (pMode !== 'ALL') params.paymentMode = pMode;
-    if (pStatus !== 'ALL') params.paymentStatus = pStatus;
+    if (appliedStartDate) params.startDate = appliedStartDate;
+    if (appliedEndDate) params.endDate = appliedEndDate;
+    if (appliedPaymentMode !== 'ALL') params.paymentMode = appliedPaymentMode;
+    if (appliedPaymentStatus !== 'ALL') params.paymentStatus = appliedPaymentStatus;
 
     api.get('/api/orders/metrics/revenue/details', { params })
       .then((res) => {
-        setRevenueDetails(res.data.data || []);
-        setTotalRows(res.data.total || 0);
-        setLoadingDetails(false);
+        if (!cancelled) {
+          setRevenueDetails(res.data.data || []);
+          setTotalRows(res.data.total || 0);
+          setLoadingDetails(false);
+        }
       })
       .catch((err) => {
         console.error('Failed to load revenue details', err);
-        setLoadingDetails(false);
+        if (!cancelled) setLoadingDetails(false);
       });
-  };
 
-  const didFetch = useRef(false);
+    return () => {
+      cancelled = true;
+    };
+  }, [page, rowsPerPage, appliedStartDate, appliedEndDate, appliedPaymentMode, appliedPaymentStatus]);
 
+  // Sync Inspect Dialog with ?inspect=<orderId>
   useEffect(() => {
-    if (!didFetch.current) {
-      didFetch.current = true;
-      fetchRevenueMetrics(defaultStart, defaultEnd, trendMode, paymentMode, paymentStatus);
-      fetchRevenueDetails(0, rowsPerPage, defaultStart, defaultEnd, paymentMode, paymentStatus);
+    if (!inspectOrderId) {
+      setOpenDetail(false);
+      setSelectedOrder(null);
+      setDetailError(null);
+      setLoadingOrderDetail(false);
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    if (didFetch.current) {
-      fetchRevenueMetrics(startDate, endDate, trendMode, paymentMode, paymentStatus);
-    }
-  }, [trendMode]);
+    let cancelled = false;
+    setOpenDetail(true);
+    setLoadingOrderDetail(true);
+    setDetailError(null);
+    api.get(`/api/orders/${inspectOrderId}`)
+      .then((res) => {
+        if (!cancelled) {
+          setSelectedOrder(res.data);
+          setLoadingOrderDetail(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch order details', err);
+        if (!cancelled) {
+          setDetailError(err.response?.data?.message || 'Failed to fetch order details.');
+          setLoadingOrderDetail(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inspectOrderId]);
 
   const handleApplyFilters = () => {
-    setPage(0);
-    fetchRevenueMetrics(startDate, endDate, trendMode, paymentMode, paymentStatus);
-    fetchRevenueDetails(0, rowsPerPage, startDate, endDate, paymentMode, paymentStatus);
+    updateRevenueParams({
+      from: startDate === defaultStart ? null : startDate,
+      to: endDate === defaultEnd ? null : endDate,
+      mode: paymentMode,
+      status: paymentStatus,
+      page: null
+    });
   };
 
   const handleResetFilters = () => {
-    const { start: resetStart, end: resetEnd } = getCurrentMonthDateRange();
-    setStartDate(resetStart);
-    setEndDate(resetEnd);
+    setStartDate(defaultStart);
+    setEndDate(defaultEnd);
     setPaymentMode('ALL');
     setPaymentStatus('ALL');
-    setPage(0);
-    fetchRevenueMetrics(resetStart, resetEnd, trendMode, 'ALL', 'ALL');
-    fetchRevenueDetails(0, rowsPerPage, resetStart, resetEnd, 'ALL', 'ALL');
+    updateRevenueParams({
+      from: null,
+      to: null,
+      mode: null,
+      status: null,
+      page: null
+    });
   };
 
   const handleChangePage = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-    fetchRevenueDetails(newPage, rowsPerPage, startDate, endDate, paymentMode, paymentStatus);
+    updateRevenueParams({ page: String(newPage + 1) });
   };
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const limit = parseInt(event.target.value, 10);
-    setRowsPerPage(limit);
-    setPage(0);
-    fetchRevenueDetails(0, limit, startDate, endDate, paymentMode, paymentStatus);
+    updateRevenueParams({ limit: String(limit), page: null });
   };
 
   // Parse Mode Breakdown for PieChart
@@ -520,24 +599,20 @@ export default function RevenueDashboard() {
                       {(['daily', 'monthly', 'quarterly', 'yearly'] as const).map((mode) => (
                         <Button
                           key={mode}
+                          component={Link}
+                          to={buildRevenueUrl({ trend: mode })}
                           size="small"
                           variant={trendMode === mode ? 'contained' : 'outlined'}
-                          onClick={() => setTrendMode(mode)}
                           sx={{
                             borderRadius: 2,
                             textTransform: 'capitalize',
                             bgcolor: trendMode === mode ? '#FF5A09' : 'transparent',
-                            color: trendMode === mode ? '#FF5A09' : '#757575',
+                            color: trendMode === mode ? '#FFF' : '#757575',
                             borderColor: '#FF5A09',
                             '&:hover': {
                               bgcolor: trendMode === mode ? '#E04E07' : 'rgba(255, 90, 9, 0.04)',
                               borderColor: '#FF5A09'
                             },
-                            // Override custom styling to handle Recharts themes nicely
-                            ...(trendMode === mode && {
-                              color: '#FFF',
-                              borderColor: '#FF5A09'
-                            })
                           }}
                         >
                           {mode === 'daily' ? 'Days' : mode === 'monthly' ? 'Months' : mode === 'quarterly' ? 'Quarters' : 'Years'}
@@ -710,14 +785,34 @@ export default function RevenueDashboard() {
                       {new Date(order.createdAt).toLocaleString()}
                     </TableCell>
                     <TableCell sx={{ fontWeight: 800 }}>
-                      {order.orderNumber}
+                      <MuiLink
+                        component={Link}
+                        to={`/orders/${order.id}`}
+                        underline="hover"
+                        sx={{ fontWeight: 800, color: linkColor }}
+                      >
+                        {order.orderNumber}
+                      </MuiLink>
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>
                       <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {order.customer?.name}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
+                        {order.customer?.name ? (
+                          <MuiLink
+                            component={Link}
+                            to={getCustomerSearchUrl(order.customer)}
+                            underline="hover"
+                            color="inherit"
+                            variant="body2"
+                            sx={{ fontWeight: 700, display: 'inline-block', '&:hover': { color: linkColor } }}
+                          >
+                            {order.customer.name}
+                          </MuiLink>
+                        ) : (
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            N/A
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
                           {order.customer?.contact || 'N/A'}
                         </Typography>
                       </Box>
@@ -771,17 +866,19 @@ export default function RevenueDashboard() {
                     <TableCell align="center">
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center' }}>
                         <Button
+                          component={Link}
+                          to={buildRevenueUrl({ inspect: order.id })}
                           size="small"
                           variant="outlined"
-                          onClick={() => handleInspectOrder(order.id)}
                           sx={{ py: 0.2, px: 1, fontSize: '0.72rem', borderRadius: 2 }}
                         >
                           Inspect
                         </Button>
                         <IconButton
+                          component={Link}
+                          to={`/orders/${order.id}/edit`}
                           size="small"
                           color="primary"
-                          onClick={() => navigate(`/orders/${order.id}/edit`)}
                           title="Edit Order"
                         >
                           <EditIcon fontSize="small" />
@@ -814,16 +911,25 @@ export default function RevenueDashboard() {
       </TableContainer>
 
       {/* Inspect Order Details Dialog */}
-      <Dialog open={openDetail} onClose={() => setOpenDetail(false)} maxWidth="sm" fullWidth>
-        {loadingOrderDetail ? (
+      <Dialog open={openDetail} onClose={() => updateRevenueParams({ inspect: null })} maxWidth="sm" fullWidth>
+        {loadingOrderDetail && !selectedOrder ? (
           <Stack direction="row" sx={{ justifyContent: 'center', py: 8 }}>
             <CircularProgress color="primary" />
           </Stack>
+        ) : detailError && !selectedOrder ? (
+          <DialogContent sx={{ py: 4 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>{detailError}</Alert>
+            <Button variant="outlined" onClick={() => updateRevenueParams({ inspect: null })}>Close</Button>
+          </DialogContent>
         ) : selectedOrder && (
           <>
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}`, gap: 1.5, flexWrap: 'wrap' }}>
               <Typography variant="h5" sx={{ color: '#0A3BB0', fontWeight: 800 }}>
-                Order Details ({selectedOrder.orderNumber})
+                Order Details (
+                <MuiLink component={Link} to={`/orders/${selectedOrder.id}`} underline="hover" color="inherit">
+                  {selectedOrder.orderNumber}
+                </MuiLink>
+                )
               </Typography>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Chip
@@ -849,7 +955,20 @@ export default function RevenueDashboard() {
                 {selectedOrder.items?.map((item: any) => (
                   <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.item?.name}</Typography>
+                      {item.item?.id ? (
+                        <MuiLink
+                          component={Link}
+                          to={`/items?item=${item.item.id}`}
+                          underline="hover"
+                          color="inherit"
+                          variant="body2"
+                          sx={{ fontWeight: 700, display: 'block', '&:hover': { color: linkColor } }}
+                        >
+                          {item.item.name}
+                        </MuiLink>
+                      ) : (
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.item?.name}</Typography>
+                      )}
                       <Typography variant="caption" color="textSecondary">{item.quantity} x Rs. {parseFloat(item.priceAtOrder as any).toFixed(2)}</Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 800 }}>
@@ -872,8 +991,20 @@ export default function RevenueDashboard() {
               </Typography>
               <Grid container spacing={2} sx={{ mb: 2.5 }}>
                 <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Name</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.name}</Typography>
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>Name</Typography>
+                  {selectedOrder.customer?.name ? (
+                    <MuiLink
+                      component={Link}
+                      to={getCustomerSearchUrl(selectedOrder.customer)}
+                      underline="hover"
+                      variant="body2"
+                      sx={{ fontWeight: 700, color: linkColor }}
+                    >
+                      {selectedOrder.customer.name}
+                    </MuiLink>
+                  ) : (
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>N/A</Typography>
+                  )}
                 </Grid>
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Contact</Typography>
@@ -967,18 +1098,16 @@ export default function RevenueDashboard() {
             </DialogContent>
             <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2, display: 'flex', justifyContent: 'space-between' }}>
               <Button
+                component={Link}
+                to={`/orders/${selectedOrder.id}/edit`}
                 variant="contained"
                 size="small"
                 startIcon={<EditIcon />}
-                onClick={() => {
-                  setOpenDetail(false);
-                  navigate(`/orders/${selectedOrder.id}/edit`);
-                }}
                 sx={{ borderRadius: 2, bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' } }}
               >
                 Edit Order
               </Button>
-              <Button variant="outlined" onClick={() => setOpenDetail(false)} sx={{ borderRadius: 3 }}>
+              <Button variant="outlined" onClick={() => updateRevenueParams({ inspect: null })} sx={{ borderRadius: 3 }}>
                 Close
               </Button>
             </DialogActions>

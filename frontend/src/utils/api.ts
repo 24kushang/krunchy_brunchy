@@ -28,9 +28,10 @@ api.interceptors.response.use(
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
       
-      // Redirect to login page only if not already there
+      // Redirect to login page (preserving full URL) only if not already there
       if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+        const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
       }
     }
     return Promise.reject(error);

@@ -9,6 +9,7 @@ import {
   Query,
   Header,
   Res,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { CustomersService } from './customers.service';
@@ -69,6 +70,11 @@ export class CustomersController {
     const csv = this.customersService.generateCSV(result.data);
     res.attachment('customers_directory.csv');
     return res.status(200).send(csv);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.customersService.findOne(id);
   }
 
   @Post()

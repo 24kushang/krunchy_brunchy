@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -23,6 +24,7 @@ import {
   FormLabel,
   Divider,
   Switch,
+  Link as MuiLink,
   useTheme
 } from '@mui/material';
 import {
@@ -72,17 +74,35 @@ interface Metrics {
 
 export default function Customers() {
   const theme = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
+
+  // URL-backed filters, pagination & modal state
+  const search = searchParams.get('search') || '';
+  const locationFilter = searchParams.get('location') || '';
+  const genderFilter = searchParams.get('gender') || 'ALL';
+  const pageParam = Math.max(0, (parseInt(searchParams.get('page') || '1', 10) || 1) - 1);
+  const rawPageSize = parseInt(searchParams.get('pageSize') || '10', 10);
+  const pageSizeParam = [10, 20].includes(rawPageSize) ? rawPageSize : 10;
+  const paginationModel = useMemo(
+    () => ({ page: pageParam, pageSize: pageSizeParam }),
+    [pageParam, pageSizeParam]
+  );
+  const editCustomerId = searchParams.get('edit');
+  const isNewParam = searchParams.get('new') === '1';
+
+  // Smooth debounced text inputs
+  const [searchInput, setSearchInput] = useState(search);
+  const lastCommittedSearchRef = useRef(search);
+  const [locationInput, setLocationInput] = useState(locationFilter);
+  const lastCommittedLocationRef = useRef(locationFilter);
+
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const customersRef = useRef<Customer[]>(customers);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [genderFilter, setGenderFilter] = useState('ALL');
-
   // Server-side pagination and sorting states
-  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
   const [totalRows, setTotalRows] = useState(0);
   const [sortModel, setSortModel] = useState<GridSortModel>([]);
 
@@ -90,6 +110,8 @@ export default function Customers() {
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loadingDialogCustomer, setLoadingDialogCustomer] = useState(false);
+  const initializedModalKeyRef = useRef<string | null>(null);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [noContact, setNoContact] = useState(false);
@@ -98,11 +120,49 @@ export default function Customers() {
   const [location, setLocation] = useState('');
   const [address, setAddress] = useState('');
 
-  const fetchCustomers = () => {
+  const buildCustomersParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(overrides).forEach(([key, val]) => {
+        if (
+          val === null ||
+          val === undefined ||
+          val === '' ||
+          (key === 'gender' && val === 'ALL') ||
+          (key === 'page' && val === '1') ||
+          (key === 'pageSize' && val === '10')
+        ) {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
+      });
+      return next;
+    },
+    [searchParams]
+  );
+
+  const buildCustomersUrl = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildCustomersParams(overrides);
+      const qs = next.toString();
+      return qs ? `/customers?${qs}` : '/customers';
+    },
+    [buildCustomersParams]
+  );
+
+  const updateCustomerParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      setSearchParams(buildCustomersParams(overrides));
+    },
+    [buildCustomersParams, setSearchParams]
+  );
+
+  const fetchCustomers = useCallback(() => {
     setLoading(true);
     const params: Record<string, any> = {
-      page: paginationModel.page + 1,
-      limit: paginationModel.pageSize
+      page: pageParam + 1,
+      limit: pageSizeParam
     };
     if (search) params.search = search;
     if (locationFilter && locationFilter !== 'ALL') params.location = locationFilter;
@@ -123,36 +183,56 @@ export default function Customers() {
         console.error(err);
         setLoading(false);
       });
-  };
+  }, [pageParam, pageSizeParam, sortModel, search, locationFilter, genderFilter]);
 
-  const fetchMetrics = () => {
+  const fetchMetrics = useCallback(() => {
     api.get('/api/customers/metrics')
       .then((res) => setMetrics(res.data))
       .catch((err) => console.error(err));
-  };
+  }, []);
 
   useEffect(() => {
     fetchCustomers();
-  }, [paginationModel, sortModel, locationFilter, genderFilter]);
+  }, [fetchCustomers]);
 
   useEffect(() => {
-    if (paginationModel.page !== 0) {
-      setPaginationModel(prev => ({ ...prev, page: 0 }));
-    }
     fetchMetrics();
-  }, [locationFilter, genderFilter]);
+  }, [fetchMetrics]);
+
+  // Sync URL filter changes back to draft inputs on navigation
+  useEffect(() => {
+    if (search !== lastCommittedSearchRef.current) {
+      lastCommittedSearchRef.current = search;
+      setSearchInput(search);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    if (locationFilter !== lastCommittedLocationRef.current) {
+      lastCommittedLocationRef.current = locationFilter;
+      setLocationInput(locationFilter);
+    }
+  }, [locationFilter]);
 
   // Debounced search lookup
   useEffect(() => {
+    if (searchInput === search) return;
     const delayDebounceFn = setTimeout(() => {
-      if (paginationModel.page !== 0) {
-        setPaginationModel(prev => ({ ...prev, page: 0 }));
-      } else {
-        fetchCustomers();
-      }
+      lastCommittedSearchRef.current = searchInput;
+      updateCustomerParams({ search: searchInput || null, page: null });
     }, 400);
     return () => clearTimeout(delayDebounceFn);
-  }, [search]);
+  }, [searchInput, search, updateCustomerParams]);
+
+  // Debounced location lookup
+  useEffect(() => {
+    if (locationInput === locationFilter) return;
+    const delayDebounceFn = setTimeout(() => {
+      lastCommittedLocationRef.current = locationInput;
+      updateCustomerParams({ location: locationInput || null, page: null });
+    }, 400);
+    return () => clearTimeout(delayDebounceFn);
+  }, [locationInput, locationFilter, updateCustomerParams]);
 
   const handleExportCSV = () => {
     let url = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/customers/export?`;
@@ -163,7 +243,7 @@ export default function Customers() {
     window.open(url, '_blank');
   };
 
-  const handleOpenCreate = () => {
+  const populateCreateForm = useCallback(() => {
     setIsEditMode(false);
     setEditingId(null);
     setName('');
@@ -173,10 +253,11 @@ export default function Customers() {
     setGender('Male');
     setLocation('');
     setAddress('');
+    setLoadingDialogCustomer(false);
     setOpenDialog(true);
-  };
+  }, []);
 
-  const handleOpenEdit = (customer: Customer) => {
+  const populateEditForm = useCallback((customer: Customer) => {
     setIsEditMode(true);
     setEditingId(customer.id);
     setName(customer.name);
@@ -186,7 +267,66 @@ export default function Customers() {
     setGender(customer.gender);
     setLocation(customer.location);
     setAddress(customer.address || '');
+    setLoadingDialogCustomer(false);
     setOpenDialog(true);
+  }, []);
+
+  useEffect(() => {
+    customersRef.current = customers;
+  }, [customers]);
+
+  // Sync dialog open state from ?edit=<id> or ?new=1
+  useEffect(() => {
+    if (editCustomerId) {
+      const modalKey = `edit:${editCustomerId}`;
+      if (initializedModalKeyRef.current === modalKey) return;
+
+      const localMatch = customersRef.current.find((c) => c.id === editCustomerId);
+      if (localMatch) {
+        initializedModalKeyRef.current = modalKey;
+        populateEditForm(localMatch);
+        return;
+      }
+
+      let cancelled = false;
+      setOpenDialog(true);
+      setIsEditMode(true);
+      setLoadingDialogCustomer(true);
+      api.get(`/api/customers/${editCustomerId}`)
+        .then((res) => {
+          if (!cancelled) {
+            initializedModalKeyRef.current = modalKey;
+            populateEditForm(res.data);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load customer for edit', err);
+          if (!cancelled) {
+            setLoadingDialogCustomer(false);
+            updateCustomerParams({ edit: null });
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (isNewParam) {
+      if (initializedModalKeyRef.current !== 'new') {
+        initializedModalKeyRef.current = 'new';
+        populateCreateForm();
+      }
+      return;
+    }
+
+    initializedModalKeyRef.current = null;
+    setOpenDialog(false);
+  }, [editCustomerId, isNewParam, populateCreateForm, populateEditForm, updateCustomerParams]);
+
+  const handleCloseDialog = () => {
+    initializedModalKeyRef.current = null;
+    setOpenDialog(false);
+    updateCustomerParams({ edit: null, new: null });
   };
 
   const handleSave = async () => {
@@ -214,7 +354,7 @@ export default function Customers() {
       } else {
         await api.post('/api/customers', payload);
       }
-      setOpenDialog(false);
+      handleCloseDialog();
       fetchCustomers();
       fetchMetrics();
     } catch (err: any) {
@@ -225,7 +365,16 @@ export default function Customers() {
   const columns: GridColDef[] = [
     {
       field: 'name', headerName: 'Customer Name', width: 180, renderCell: (params) => (
-        <Typography variant="body2" sx={{ fontWeight: 700 }}>{params.value}</Typography>
+        <MuiLink
+          component={Link}
+          to={buildCustomersUrl({ edit: params.row.id, new: null })}
+          onClick={(e) => e.stopPropagation()}
+          underline="hover"
+          variant="body2"
+          sx={{ fontWeight: 700, color: linkColor }}
+        >
+          {params.value}
+        </MuiLink>
       )
     },
     {
@@ -248,7 +397,12 @@ export default function Customers() {
       width: 90,
       sortable: false,
       renderCell: (params) => (
-        <Button size="small" onClick={() => handleOpenEdit(params.row)}>
+        <Button
+          component={Link}
+          to={buildCustomersUrl({ edit: params.row.id, new: null })}
+          onClick={(e) => e.stopPropagation()}
+          size="small"
+        >
           Edit
         </Button>
       )
@@ -406,10 +560,11 @@ export default function Customers() {
           </Button>
 
           <Button
+            component={Link}
+            to={buildCustomersUrl({ new: '1', edit: null })}
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
-            onClick={handleOpenCreate}
             sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}
           >
             Add Profile
@@ -427,8 +582,8 @@ export default function Customers() {
                 variant="outlined"
                 size="small"
                 fullWidth
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
               />
             </Grid>
 
@@ -438,8 +593,8 @@ export default function Customers() {
                 variant="outlined"
                 size="small"
                 fullWidth
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value)}
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
               />
             </Grid>
 
@@ -449,7 +604,7 @@ export default function Customers() {
                 <Select
                   value={genderFilter}
                   label="Gender"
-                  onChange={(e) => setGenderFilter(e.target.value)}
+                  onChange={(e) => updateCustomerParams({ gender: e.target.value, page: null })}
                 >
                   <MenuItem value="ALL">All Genders</MenuItem>
                   <MenuItem value="Male">Male</MenuItem>
@@ -471,7 +626,12 @@ export default function Customers() {
           paginationMode="server"
           rowCount={totalRows}
           paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
+          onPaginationModelChange={(model) => {
+            updateCustomerParams({
+              page: String(model.page + 1),
+              pageSize: String(model.pageSize)
+            });
+          }}
           sortingMode="server"
           onSortModelChange={setSortModel}
           pageSizeOptions={[10, 20]}
@@ -489,14 +649,19 @@ export default function Customers() {
       </Box>
 
       {/* Customer Create / Edit Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="xs" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h6" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Update Customer Profile' : 'Register Customer Profile'}
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ py: 3 }}>
-          <Stack spacing={2.5} sx={{ mt: 1 }}>
+          {loadingDialogCustomer ? (
+            <Stack direction="row" sx={{ justifyContent: 'center', py: 5 }}>
+              <CircularProgress />
+            </Stack>
+          ) : (
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
             <TextField
               label="Customer Name"
               fullWidth
@@ -566,13 +731,14 @@ export default function Customers() {
                 <FormControlLabel value="Other" control={<Radio />} label="Other" />
               </RadioGroup>
             </FormControl>
-          </Stack>
+            </Stack>
+          )}
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
-          <Button variant="outlined" onClick={() => setOpenDialog(false)} sx={{ borderRadius: 3 }}>
+          <Button variant="outlined" onClick={handleCloseDialog} sx={{ borderRadius: 3 }}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSave} sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}>
+          <Button variant="contained" onClick={handleSave} disabled={loadingDialogCustomer} sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}>
             Save Profile
           </Button>
         </DialogActions>

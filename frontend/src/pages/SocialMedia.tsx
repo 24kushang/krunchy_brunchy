@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -49,11 +50,29 @@ interface PostContent {
 
 export default function SocialMedia() {
   const theme = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [posts, setPosts] = useState<PostContent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Calendar Date Navigation
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const formatMonthParam = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const defaultMonthStr = useMemo(() => formatMonthParam(new Date()), []);
+  const monthParam = searchParams.get('month');
+  const currentDate = useMemo(() => {
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      const [y, m] = monthParam.split('-').map(Number);
+      if (m >= 1 && m <= 12) return new Date(y, m - 1, 1);
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }, [monthParam]);
+
+  const prevMonthStr = formatMonthParam(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const nextMonthStr = formatMonthParam(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+
+  const postParamId = searchParams.get('post');
+  const editParamId = searchParams.get('edit');
+  const isNewParam = searchParams.get('new') === '1';
 
   // Details drawer
   const [selectedPost, setSelectedPost] = useState<PostContent | null>(null);
@@ -62,6 +81,7 @@ export default function SocialMedia() {
   // Form states
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const initializedEditRef = useRef<string | null>(null);
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
@@ -81,7 +101,43 @@ export default function SocialMedia() {
     'Approval': false,
     'Published': false });
 
-  const fetchPosts = () => {
+  const buildSocialParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(overrides).forEach(([key, val]) => {
+        if (
+          val === null ||
+          val === undefined ||
+          val === '' ||
+          (key === 'month' && val === defaultMonthStr)
+        ) {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
+      });
+      return next;
+    },
+    [searchParams, defaultMonthStr]
+  );
+
+  const buildSocialUrl = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildSocialParams(overrides);
+      const qs = next.toString();
+      return qs ? `/social-media?${qs}` : '/social-media';
+    },
+    [buildSocialParams]
+  );
+
+  const updateSocialParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      setSearchParams(buildSocialParams(overrides));
+    },
+    [buildSocialParams, setSearchParams]
+  );
+
+  const fetchPosts = useCallback(() => {
     setLoading(true);
     api.get('/api/social-media')
       .then((res) => {
@@ -92,19 +148,11 @@ export default function SocialMedia() {
         console.error(err);
         setLoading(false);
       });
-  };
+  }, []);
 
   useEffect(() => {
     fetchPosts();
-  }, []);
-
-  const handlePrevMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-
-  const handleNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
+  }, [fetchPosts]);
 
   // Google Drive upload pointer
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,41 +176,86 @@ export default function SocialMedia() {
     }
   };
 
-  const handleOpenCreate = () => {
-    setIsEditMode(false);
-    setTitle('');
-    setCaption('');
-    setScheduledAt(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16)); // tomorrow
-    setMediaUrl('');
-    setSelectedPlatforms({ Instagram: true, Facebook: false, LinkedIn: false });
-    setChecklistTasks({
-      'Graphic Design': false,
-      'Caption Drafted': false,
-      'Approval': false,
-      'Published': false });
-    setOpenDialog(true);
+  // Sync Inspect Post Drawer with ?post=<id>
+  useEffect(() => {
+    if (!postParamId) {
+      setDrawerOpen(false);
+      if (!editParamId) setSelectedPost(null);
+      return;
+    }
+    const found = posts.find((p) => p.id === postParamId);
+    if (found) {
+      setSelectedPost(found);
+      setDrawerOpen(true);
+    } else if (!loading && posts.length > 0) {
+      updateSocialParams({ post: null });
+    }
+  }, [postParamId, posts, loading, editParamId, updateSocialParams]);
+
+  // Sync Create/Edit Dialog with ?edit=<id> or ?new=1
+  useEffect(() => {
+    if (editParamId) {
+      const key = `edit:${editParamId}`;
+      if (initializedEditRef.current === key) return;
+      const found = posts.find((p) => p.id === editParamId);
+      if (found) {
+        initializedEditRef.current = key;
+        setIsEditMode(true);
+        setSelectedPost(found);
+        setTitle(found.title);
+        setCaption(found.caption);
+
+        // Format timestamp for datetime-local input
+        const localTime = new Date(found.scheduledAt);
+        const tzOffset = localTime.getTimezoneOffset() * 60000;
+        const formatted = new Date(localTime.getTime() - tzOffset).toISOString().slice(0, 16);
+        setScheduledAt(formatted);
+
+        setMediaUrl(found.mediaUrl || '');
+
+        const platformsMap: Record<string, boolean> = { Instagram: false, Facebook: false, LinkedIn: false };
+        found.platforms.forEach((p) => { platformsMap[p] = true; });
+        setSelectedPlatforms(platformsMap);
+
+        setChecklistTasks(found.checklist || {});
+        setOpenDialog(true);
+      } else if (!loading && posts.length > 0) {
+        updateSocialParams({ edit: null });
+      }
+      return;
+    }
+
+    if (isNewParam) {
+      if (initializedEditRef.current !== 'new') {
+        initializedEditRef.current = 'new';
+        setIsEditMode(false);
+        setTitle('');
+        setCaption('');
+        setScheduledAt(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16)); // tomorrow
+        setMediaUrl('');
+        setSelectedPlatforms({ Instagram: true, Facebook: false, LinkedIn: false });
+        setChecklistTasks({
+          'Graphic Design': false,
+          'Caption Drafted': false,
+          'Approval': false,
+          'Published': false });
+        setOpenDialog(true);
+      }
+      return;
+    }
+
+    initializedEditRef.current = null;
+    setOpenDialog(false);
+  }, [editParamId, isNewParam, posts, loading, updateSocialParams]);
+
+  const handleCloseDrawer = () => {
+    updateSocialParams({ post: null });
   };
 
-  const handleOpenEdit = (post: PostContent) => {
-    setIsEditMode(true);
-    setSelectedPost(post);
-    setTitle(post.title);
-    setCaption(post.caption);
-    
-    // Format timestamp for datetime-local input
-    const localTime = new Date(post.scheduledAt);
-    const tzOffset = localTime.getTimezoneOffset() * 60000;
-    const formatted = new Date(localTime.getTime() - tzOffset).toISOString().slice(0, 16);
-    setScheduledAt(formatted);
-
-    setMediaUrl(post.mediaUrl || '');
-    
-    const platformsMap: Record<string, boolean> = { Instagram: false, Facebook: false, LinkedIn: false };
-    post.platforms.forEach(p => { platformsMap[p] = true; });
-    setSelectedPlatforms(platformsMap);
-    
-    setChecklistTasks(post.checklist || {});
-    setOpenDialog(true);
+  const handleCloseDialog = () => {
+    initializedEditRef.current = null;
+    setOpenDialog(false);
+    updateSocialParams({ edit: null, new: null });
   };
 
   const handleSave = async () => {
@@ -186,9 +279,11 @@ export default function SocialMedia() {
       } else {
         await api.post('/api/social-media', payload);
       }
+      initializedEditRef.current = null;
       setOpenDialog(false);
-      fetchPosts();
       setDrawerOpen(false);
+      updateSocialParams({ edit: null, new: null, post: null });
+      fetchPosts();
     } catch (err) {
       console.error(err);
       alert('Failed to save social media content calendar post');
@@ -266,7 +361,11 @@ export default function SocialMedia() {
       {/* Calendar Navigation header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-          <IconButton onClick={handlePrevMonth} sx={{ border: `1px solid ${theme.palette.divider}` }}>
+          <IconButton
+            component={Link}
+            to={buildSocialUrl({ month: prevMonthStr })}
+            sx={{ border: `1px solid ${theme.palette.divider}` }}
+          >
             <PrevIcon />
           </IconButton>
           
@@ -274,16 +373,21 @@ export default function SocialMedia() {
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
           </Typography>
           
-          <IconButton onClick={handleNextMonth} sx={{ border: `1px solid ${theme.palette.divider}` }}>
+          <IconButton
+            component={Link}
+            to={buildSocialUrl({ month: nextMonthStr })}
+            sx={{ border: `1px solid ${theme.palette.divider}` }}
+          >
             <NextIcon />
           </IconButton>
         </Stack>
 
         <Button
+          component={Link}
+          to={buildSocialUrl({ new: '1', edit: null })}
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
-          onClick={handleOpenCreate}
           sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}
         >
           Add Calendar Post
@@ -340,11 +444,10 @@ export default function SocialMedia() {
                     {dayPosts.map((post) => (
                       <Box
                         key={post.id}
-                        onClick={() => {
-                          setSelectedPost(post);
-                          setDrawerOpen(true);
-                        }}
+                        component={Link}
+                        to={buildSocialUrl({ post: post.id })}
                         sx={{
+                          textDecoration: 'none',
                           bgcolor: theme.palette.mode === 'light' ? 'rgba(10, 59, 176, 0.05)' : 'rgba(76, 123, 244, 0.1)',
                           color: theme.palette.mode === 'light' ? '#0A3BB0' : '#4C7BF4',
                           px: 1,
@@ -383,7 +486,7 @@ export default function SocialMedia() {
       <Drawer
         anchor="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={handleCloseDrawer}
         slotProps={{ paper: { sx: { width: { xs: '100%', sm: 380 }, p: 3 } } }}
       >
         {selectedPost && (
@@ -392,7 +495,7 @@ export default function SocialMedia() {
               <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
                 Inspect Post
               </Typography>
-              <IconButton onClick={() => handleOpenEdit(selectedPost)}>
+              <IconButton component={Link} to={buildSocialUrl({ edit: selectedPost.id, new: null })}>
                 <EditIcon color="primary" />
               </IconButton>
             </Box>
@@ -496,7 +599,7 @@ export default function SocialMedia() {
       </Drawer>
 
       {/* Dialog for Post Create / Update */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Edit Content Schedule' : 'Schedule Content Release'}
@@ -578,7 +681,7 @@ export default function SocialMedia() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
-          <Button variant="outlined" onClick={() => setOpenDialog(false)} sx={{ borderRadius: 3 }}>
+          <Button variant="outlined" onClick={handleCloseDialog} sx={{ borderRadius: 3 }}>
             Cancel
           </Button>
           <Button variant="contained" onClick={handleSave} sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}>

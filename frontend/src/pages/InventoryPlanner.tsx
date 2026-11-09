@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -28,6 +29,9 @@ import {
   TableRow,
   Paper,
   Divider,
+  IconButton,
+  Tooltip,
+  Link as MuiLink,
   useTheme
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
@@ -87,7 +91,13 @@ interface Shortage {
 
 export default function InventoryPlanner() {
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState(0); // 0 = Stock Management, 1 = FIFO Planner
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
+
+  const activeTab = searchParams.get('tab') === 'fifo' ? 1 : 0; // 0 = Stock Management, 1 = FIFO Planner
+  const adjustParamItemId = searchParams.get('adjust');
+  const adjustParamHubId = searchParams.get('hub');
+
   const [loading, setLoading] = useState(true);
 
   // Tab A - Stock States
@@ -104,8 +114,40 @@ export default function InventoryPlanner() {
   const [adjustHubId, setAdjustHubId] = useState('');
   const [adjustQuantity, setAdjustQuantity] = useState(0);
   const [submittingAdjust, setSubmittingAdjust] = useState(false);
+  const initializedAdjustRef = useRef<string | null>(null);
 
-  const fetchStockData = () => {
+  const buildInventoryParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(overrides).forEach(([key, val]) => {
+        if (val === null || val === undefined || val === '' || (key === 'tab' && val === 'stock')) {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
+      });
+      return next;
+    },
+    [searchParams]
+  );
+
+  const buildInventoryUrl = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildInventoryParams(overrides);
+      const qs = next.toString();
+      return qs ? `/inventory?${qs}` : '/inventory';
+    },
+    [buildInventoryParams]
+  );
+
+  const updateInventoryParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      setSearchParams(buildInventoryParams(overrides));
+    },
+    [buildInventoryParams, setSearchParams]
+  );
+
+  const fetchStockData = useCallback(() => {
     setLoading(true);
     api.get('/api/inventories')
       .then((res) => {
@@ -117,9 +159,9 @@ export default function InventoryPlanner() {
         console.error('Failed to fetch stock data', err);
         setLoading(false);
       });
-  };
+  }, []);
 
-  const fetchFIFOPlanning = () => {
+  const fetchFIFOPlanning = useCallback(() => {
     setLoading(true);
     api.get('/api/inventories/planning')
       .then((res) => {
@@ -131,7 +173,7 @@ export default function InventoryPlanner() {
         console.error('Failed to fetch FIFO planner data', err);
         setLoading(false);
       });
-  };
+  }, []);
 
   const handleExecuteTransit = async (transit: ProbableTransit) => {
     try {
@@ -157,15 +199,34 @@ export default function InventoryPlanner() {
     } else {
       fetchFIFOPlanning();
     }
-  }, [activeTab]);
+  }, [activeTab, fetchStockData, fetchFIFOPlanning]);
 
-  const handleOpenAdjust = (item: ItemStock) => {
-    setAdjustItem({ itemId: item.itemId, name: item.itemName });
-    if (hubs.length > 0) {
-      setAdjustHubId(hubs[0].id);
-      setAdjustQuantity(item.stocks[hubs[0].id] || 0);
+  // Sync Adjust Stock dialog with ?adjust=<itemId>
+  useEffect(() => {
+    if (!adjustParamItemId) {
+      initializedAdjustRef.current = null;
+      setOpenAdjust(false);
+      return;
     }
-    setOpenAdjust(true);
+
+    const key = `${adjustParamItemId}:${adjustParamHubId || ''}`;
+    if (initializedAdjustRef.current === key) return;
+
+    const item = itemStocks.find((i) => i.itemId === adjustParamItemId);
+    if (item && hubs.length > 0) {
+      initializedAdjustRef.current = key;
+      const preferredHub = hubs.find((h) => h.id === adjustParamHubId) || hubs[0];
+      setAdjustItem({ itemId: item.itemId, name: item.itemName });
+      setAdjustHubId(preferredHub.id);
+      setAdjustQuantity(item.stocks[preferredHub.id] || 0);
+      setOpenAdjust(true);
+    }
+  }, [adjustParamItemId, adjustParamHubId, itemStocks, hubs]);
+
+  const handleCloseAdjust = () => {
+    initializedAdjustRef.current = null;
+    setOpenAdjust(false);
+    updateInventoryParams({ adjust: null, hub: null });
   };
 
   const handleHubChangeInAdjust = (hubId: string) => {
@@ -192,7 +253,7 @@ export default function InventoryPlanner() {
         locationId: adjustHubId,
         quantity: Number(adjustQuantity)
       });
-      setOpenAdjust(false);
+      handleCloseAdjust();
       fetchStockData();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to adjust stock');
@@ -230,7 +291,10 @@ export default function InventoryPlanner() {
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Tabs
             value={activeTab}
-            onChange={(_e, val) => setActiveTab(val)}
+            onChange={(e, val) => {
+              if (e?.type === 'click') return;
+              updateInventoryParams({ tab: val === 1 ? 'fifo' : null, adjust: null, hub: null });
+            }}
             sx={{
               bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
               borderRadius: 3,
@@ -239,8 +303,22 @@ export default function InventoryPlanner() {
               '& .MuiTabs-indicator': { display: 'none' }
             }}
           >
-            <Tab icon={<WarehouseIcon sx={{ fontSize: 18 }} />} label="Stock Levels" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
-            <Tab icon={<FormatListNumberedIcon sx={{ fontSize: 18 }} />} label="FIFO Production" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
+            <Tab
+              component={Link}
+              to={buildInventoryUrl({ tab: null, adjust: null, hub: null })}
+              value={0}
+              icon={<WarehouseIcon sx={{ fontSize: 18 }} />}
+              label="Stock Levels"
+              sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }}
+            />
+            <Tab
+              component={Link}
+              to={buildInventoryUrl({ tab: 'fifo', adjust: null, hub: null })}
+              value={1}
+              icon={<FormatListNumberedIcon sx={{ fontSize: 18 }} />}
+              label="FIFO Production"
+              sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }}
+            />
           </Tabs>
 
           <Button
@@ -281,7 +359,15 @@ export default function InventoryPlanner() {
                 {itemStocks.map((item) => (
                   <TableRow key={item.itemId} hover>
                     <TableCell sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
-                      {item.itemName}
+                      <MuiLink
+                        component={Link}
+                        to={`/items?item=${item.itemId}`}
+                        underline="hover"
+                        color="inherit"
+                        sx={{ '&:hover': { color: linkColor } }}
+                      >
+                        {item.itemName}
+                      </MuiLink>
                     </TableCell>
                     {hubs.map((hub) => {
                       const qty = item.stocks[hub.id] || 0;
@@ -298,9 +384,10 @@ export default function InventoryPlanner() {
                     })}
                     <TableCell align="center">
                       <Button
+                        component={Link}
+                        to={buildInventoryUrl({ adjust: item.itemId })}
                         size="small"
                         startIcon={<EditIcon />}
-                        onClick={() => handleOpenAdjust(item)}
                         sx={{ borderRadius: 2 }}
                       >
                         Adjust
@@ -366,9 +453,16 @@ export default function InventoryPlanner() {
                             border: '1px solid rgba(255, 90, 9, 0.12)'
                           }}
                         >
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          <MuiLink
+                            component={Link}
+                            to={`/items?item=${item.itemId}`}
+                            underline="hover"
+                            color="inherit"
+                            variant="subtitle2"
+                            sx={{ fontWeight: 700, '&:hover': { color: linkColor } }}
+                          >
                             {item.itemName}
-                          </Typography>
+                          </MuiLink>
                           <Chip
                             label={`+ ${item.requiredToProduce} units`}
                             color="error"
@@ -408,17 +502,46 @@ export default function InventoryPlanner() {
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                           <Box>
                             <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                              {order.orderNumber} — {order.customerName}
+                              <MuiLink
+                                component={Link}
+                                to={`/orders/${order.orderId}`}
+                                underline="hover"
+                                sx={{ color: linkColor, fontWeight: 800 }}
+                              >
+                                {order.orderNumber}
+                              </MuiLink>
+                              {' — '}
+                              <MuiLink
+                                component={Link}
+                                to={`/customers?search=${encodeURIComponent(order.customerName)}`}
+                                underline="hover"
+                                color="inherit"
+                                sx={{ '&:hover': { color: linkColor } }}
+                              >
+                                {order.customerName}
+                              </MuiLink>
                             </Typography>
                             <Typography variant="caption" color="textSecondary">
                               Order Logged: {new Date(order.createdAt).toLocaleString()} | Assigned Hub: <strong>{order.hubName}</strong>
                             </Typography>
                           </Box>
-                          <Chip
-                            label={order.allocationStatus}
-                            size="small"
-                            sx={{ bgcolor: colors.bg, color: colors.fg, fontWeight: 'bold' }}
-                          />
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                            <Chip
+                              label={order.allocationStatus}
+                              size="small"
+                              sx={{ bgcolor: colors.bg, color: colors.fg, fontWeight: 'bold' }}
+                            />
+                            <Tooltip title="Edit Order">
+                              <IconButton
+                                component={Link}
+                                to={`/orders/${order.orderId}/edit`}
+                                size="small"
+                                color="primary"
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
                         </Box>
 
                         <Divider sx={{ mb: 2 }} />
@@ -469,10 +592,17 @@ export default function InventoryPlanner() {
                                   }}
                                 >
                                   <Box>
-                                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    <MuiLink
+                                      component={Link}
+                                      to={`/items?item=${item.itemId}`}
+                                      underline="hover"
+                                      color="inherit"
+                                      variant="body2"
+                                      sx={{ fontWeight: 700, display: 'inline-block', '&:hover': { color: linkColor } }}
+                                    >
                                       {item.itemName}
-                                    </Typography>
-                                    <Typography variant="caption" color="textSecondary">
+                                    </MuiLink>
+                                    <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
                                       Requested: {item.quantityRequested} | Allocated: {item.quantityAllocated}
                                     </Typography>
                                   </Box>
@@ -507,7 +637,7 @@ export default function InventoryPlanner() {
       )}
 
       {/* Adjust Stock Dialog */}
-      <Dialog open={openAdjust} onClose={() => setOpenAdjust(false)} maxWidth="xs" fullWidth>
+      <Dialog open={openAdjust} onClose={handleCloseAdjust} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h6" sx={{ color: '#0A3BB0' }}>
             Adjust Stock Level
@@ -547,7 +677,7 @@ export default function InventoryPlanner() {
           )}
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
-          <Button variant="outlined" onClick={() => setOpenAdjust(false)} sx={{ borderRadius: 3 }}>
+          <Button variant="outlined" onClick={handleCloseAdjust} sx={{ borderRadius: 3 }}>
             Cancel
           </Button>
           <Button

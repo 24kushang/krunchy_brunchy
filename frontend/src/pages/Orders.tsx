@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -23,6 +23,9 @@ import {
   DialogActions,
   Grid,
   Divider,
+  Link as MuiLink,
+  Alert,
+  Tooltip,
   useTheme
 } from '@mui/material';
 import {
@@ -66,6 +69,7 @@ interface Order {
   cashCollectionDetails?: string;
   paymentUpdatedAt?: string;
   customer: {
+    id?: string;
     name: string;
     contact: string | null;
     location: string;
@@ -76,6 +80,7 @@ interface Order {
     quantity: number;
     priceAtOrder: number;
     item: {
+      id?: string;
       name: string;
     };
   }[];
@@ -84,24 +89,102 @@ interface Order {
 export default function Orders() {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState(0); // 0 = Kanban, 1 = Ledger
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { id: routeOrderId } = useParams<{ id?: string }>();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
 
-  // Filters (shared & Ledger Specific)
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // URL-backed view, filter, and modal states
+  const activeTab = searchParams.get('tab') === 'history' ? 1 : 0; // 0 = Kanban, 1 = Ledger
+  const search = searchParams.get('search') || '';
+  const statusFilter = searchParams.get('status') || 'ALL';
+  const startDate = searchParams.get('from') || '';
+  const endDate = searchParams.get('to') || '';
+  const pageParam = Math.max(0, (parseInt(searchParams.get('page') || '1', 10) || 1) - 1);
+  const rawPageSize = parseInt(searchParams.get('pageSize') || '10', 10);
+  const pageSizeParam = [5, 10, 20].includes(rawPageSize) ? rawPageSize : 10;
+  const paginationModel = useMemo<GridPaginationModel>(
+    () => ({ page: pageParam, pageSize: pageSizeParam }),
+    [pageParam, pageSizeParam]
+  );
+  const inspectOrderId = searchParams.get('inspect') || routeOrderId || null;
+
+  // Debounced input mirror for smooth search typing
+  const [searchInput, setSearchInput] = useState(search);
+  const lastCommittedSearchRef = useRef(search);
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const ordersRef = useRef<Order[]>(orders);
+  const [loading, setLoading] = useState(true);
 
   // Server-side DataGrid states
   const [totalRows, setTotalRows] = useState(0);
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({ page: 0, pageSize: 10 });
   const [sortModel, setSortModel] = useState<GridSortModel>([]);
 
   // Detailed Modal view
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const buildOrdersParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(overrides).forEach(([key, val]) => {
+        if (
+          val === null ||
+          val === undefined ||
+          val === '' ||
+          (key === 'tab' && val === 'kanban') ||
+          (key === 'status' && val === 'ALL') ||
+          (key === 'page' && val === '1') ||
+          (key === 'pageSize' && val === '10')
+        ) {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
+      });
+      return next;
+    },
+    [searchParams]
+  );
+
+  const buildOrdersUrl = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildOrdersParams(overrides);
+      const qs = next.toString();
+      return qs ? `/orders?${qs}` : '/orders';
+    },
+    [buildOrdersParams]
+  );
+
+  const updateOrderParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildOrdersParams(overrides);
+      if (routeOrderId) {
+        const qs = next.toString();
+        navigate(qs ? `/orders?${qs}` : '/orders');
+      } else {
+        setSearchParams(next);
+      }
+    },
+    [buildOrdersParams, routeOrderId, navigate, setSearchParams]
+  );
+
+  const handleCloseDetail = useCallback(() => {
+    if (routeOrderId) {
+      const next = buildOrdersParams({ inspect: null });
+      const qs = next.toString();
+      navigate(qs ? `/orders?${qs}` : '/orders');
+    } else {
+      updateOrderParams({ inspect: null });
+    }
+  }, [routeOrderId, buildOrdersParams, navigate, updateOrderParams]);
+
+  const getCustomerSearchUrl = (customer?: { contact?: string | null; name?: string } | null) => {
+    const q = customer?.contact || customer?.name || '';
+    return q ? `/customers?search=${encodeURIComponent(q)}` : '/customers';
+  };
 
   // Payment status updating states
   const [openPaymentDialog, setOpenPaymentDialog] = useState(false);
@@ -118,13 +201,13 @@ export default function Orders() {
   const [whatsappPromptStatus, setWhatsappPromptStatus] = useState<OrderStatus | 'Payment Received' | ''>('');
 
   // Fetch orders (Ledger vs Kanban)
-  const fetchOrders = (silent = false) => {
+  const fetchOrders = useCallback((silent = false) => {
     if (!silent) setLoading(true);
 
     // Ledger: Server-side pagination/sorting/filtering
     if (activeTab === 1) {
-      const page = paginationModel.page + 1;
-      const limit = paginationModel.pageSize;
+      const page = pageParam + 1;
+      const limit = pageSizeParam;
 
       let sortBy = 'createdAt';
       let sortOrder = 'DESC';
@@ -172,19 +255,74 @@ export default function Orders() {
           setLoading(false);
         });
     }
-  };
+  }, [activeTab, pageParam, pageSizeParam, sortModel, statusFilter, search, startDate, endDate]);
 
   useEffect(() => {
     fetchOrders();
-  }, [activeTab, paginationModel, sortModel, statusFilter, startDate, endDate]);
+  }, [fetchOrders]);
 
-  // Debounced search trigger
+  // Sync external URL search change (e.g., Back/Forward) into input box
   useEffect(() => {
+    if (search !== lastCommittedSearchRef.current) {
+      lastCommittedSearchRef.current = search;
+      setSearchInput(search);
+    }
+  }, [search]);
+
+  // Debounce search input -> URL search param
+  useEffect(() => {
+    if (searchInput === search) return;
     const delayDebounceFn = setTimeout(() => {
-      fetchOrders();
+      lastCommittedSearchRef.current = searchInput;
+      updateOrderParams({ search: searchInput || null, page: null });
     }, 400);
     return () => clearTimeout(delayDebounceFn);
-  }, [search]);
+  }, [searchInput, search, updateOrderParams]);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  // Sync Inspect modal with URL (?inspect=<id> or /orders/:id)
+  useEffect(() => {
+    if (!inspectOrderId) {
+      setOpenDetail(false);
+      setSelectedOrder(null);
+      setDetailError(null);
+      setLoadingDetail(false);
+      return;
+    }
+
+    setOpenDetail(true);
+    setDetailError(null);
+    const localMatch = ordersRef.current.find((o) => o.id === inspectOrderId) || null;
+    if (localMatch) {
+      setSelectedOrder(localMatch);
+    }
+
+    let cancelled = false;
+    setLoadingDetail(true);
+    api.get(`/api/orders/${inspectOrderId}`)
+      .then((res) => {
+        if (!cancelled) {
+          setSelectedOrder(res.data);
+          setLoadingDetail(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load order details', err);
+        if (!cancelled) {
+          setLoadingDetail(false);
+          if (!localMatch) {
+            setDetailError(err.response?.data?.message || 'Failed to load order details.');
+          }
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inspectOrderId]);
 
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
     // Find order number for prompt before patch/update
@@ -303,11 +441,44 @@ export default function Orders() {
   // Ledger grid column definitions
   const columns: GridColDef[] = [
     {
-      field: 'orderNumber', headerName: 'Order #', width: 120, renderCell: (params) => (
-        <Typography variant="body2" sx={{ fontWeight: 800 }}>{params.value}</Typography>
+      field: 'orderNumber',
+      headerName: 'Order #',
+      width: 120,
+      renderCell: (params) => (
+        <MuiLink
+          component={Link}
+          to={buildOrdersUrl({ inspect: params.row.id })}
+          onClick={(e) => e.stopPropagation()}
+          underline="hover"
+          variant="body2"
+          sx={{ fontWeight: 800, color: linkColor }}
+        >
+          {params.value}
+        </MuiLink>
       )
     },
-    { field: 'customerName', headerName: 'Customer Name', width: 150, valueGetter: (_value, row) => row.customer?.name || 'N/A' },
+    {
+      field: 'customerName',
+      headerName: 'Customer Name',
+      width: 150,
+      valueGetter: (_value, row) => row.customer?.name || 'N/A',
+      renderCell: (params) =>
+        params.row.customer?.name ? (
+          <MuiLink
+            component={Link}
+            to={getCustomerSearchUrl(params.row.customer)}
+            onClick={(e) => e.stopPropagation()}
+            underline="hover"
+            color="inherit"
+            variant="body2"
+            sx={{ '&:hover': { color: linkColor } }}
+          >
+            {params.row.customer.name}
+          </MuiLink>
+        ) : (
+          'N/A'
+        )
+    },
     { field: 'customerContact', headerName: 'Contact Info', width: 130, valueGetter: (_value, row) => row.customer?.contact || 'N/A' },
     { field: 'source', headerName: 'Source', width: 100, valueGetter: (_value, row) => (typeof row.source === 'object' ? row.source?.name : row.source) || 'N/A' },
     { field: 'expectedDeliveryDate', headerName: 'Exp Delivery', width: 130, renderCell: (params) => params.value ? new Date(params.value).toLocaleDateString() : 'N/A' },
@@ -373,22 +544,20 @@ export default function Orders() {
       renderCell: (params) => (
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
           <Button
+            component={Link}
+            to={buildOrdersUrl({ inspect: params.row.id })}
             size="small"
-            onClick={() => {
-              setSelectedOrder(params.row);
-              setOpenDetail(true);
-            }}
+            onClick={(e) => e.stopPropagation()}
             sx={{ border: `1px solid ${theme.palette.divider}`, py: 0.2, fontSize: '0.72rem' }}
           >
             Inspect
           </Button>
           <IconButton
+            component={Link}
+            to={`/orders/${params.row.id}/edit`}
             size="small"
             color="primary"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/orders/${params.row.id}/edit`);
-            }}
+            onClick={(e) => e.stopPropagation()}
             title="Edit Order"
           >
             <EditIcon fontSize="small" />
@@ -426,7 +595,14 @@ export default function Orders() {
 
         <Tabs
           value={activeTab}
-          onChange={(_e, val) => setActiveTab(val)}
+          onChange={(e, val) => {
+            if (e?.type === 'click') return;
+            updateOrderParams({
+              tab: val === 1 ? 'history' : null,
+              status: val === 0 ? null : statusFilter,
+              page: null
+            });
+          }}
           sx={{
             bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
             borderRadius: 3,
@@ -435,8 +611,22 @@ export default function Orders() {
             '& .MuiTabs-indicator': { display: 'none' }
           }}
         >
-          <Tab icon={<KanbanIcon sx={{ fontSize: 18 }} />} label="Kanban" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
-          <Tab icon={<LedgerIcon sx={{ fontSize: 18 }} />} label="Order History" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }} />
+          <Tab
+            component={Link}
+            to={buildOrdersUrl({ tab: null, status: null, page: null })}
+            value={0}
+            icon={<KanbanIcon sx={{ fontSize: 18 }} />}
+            label="Kanban"
+            sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }}
+          />
+          <Tab
+            component={Link}
+            to={buildOrdersUrl({ tab: 'history', page: null })}
+            value={1}
+            icon={<LedgerIcon sx={{ fontSize: 18 }} />}
+            label="Order History"
+            sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#FF5A09', color: '#FFF' } }}
+          />
         </Tabs>
       </Box>
 
@@ -450,8 +640,8 @@ export default function Orders() {
                 variant="outlined"
                 size="small"
                 fullWidth
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
               />
             </Grid>
 
@@ -462,7 +652,7 @@ export default function Orders() {
                   <Select
                     value={statusFilter}
                     label="Status"
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) => updateOrderParams({ status: e.target.value, page: null })}
                   >
                     <MenuItem value="ALL">All States</MenuItem>
                     <MenuItem value={OrderStatus.PENDING}>Pending</MenuItem>
@@ -483,7 +673,7 @@ export default function Orders() {
                   size="small"
                   slotProps={{ inputLabel: { shrink: true } }}
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => updateOrderParams({ from: e.target.value || null, page: null })}
                   sx={{ width: '45%' }}
                 />
                 <Typography color="textSecondary" sx={{ px: 0.5 }}>to</Typography>
@@ -493,7 +683,7 @@ export default function Orders() {
                   size="small"
                   slotProps={{ inputLabel: { shrink: true } }}
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => updateOrderParams({ to: e.target.value || null, page: null })}
                   sx={{ width: '45%' }}
                 />
               </Stack>
@@ -556,10 +746,7 @@ export default function Orders() {
                       key={order.id}
                       draggable
                       onDragStart={(e) => onDragStart(e, order.id)}
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setOpenDetail(true);
-                      }}
+                      onClick={() => updateOrderParams({ inspect: order.id })}
                       sx={{
                         cursor: 'grab',
                         flexShrink: 0, // Prevent cards from squeezing smaller
@@ -574,25 +761,61 @@ export default function Orders() {
                     >
                       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                          <MuiLink
+                            component={Link}
+                            to={buildOrdersUrl({ inspect: order.id })}
+                            draggable={false}
+                            onClick={(e) => e.stopPropagation()}
+                            underline="hover"
+                            variant="subtitle2"
+                            sx={{ fontWeight: 800, color: linkColor }}
+                          >
                             {order.orderNumber}
-                          </Typography>
+                          </MuiLink>
                           <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 800 }}>
                             Rs. {parseFloat(order.totalAmount as any).toFixed(2)}
                           </Typography>
                         </Stack>
 
-                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                          {order.customer?.name}
-                        </Typography>
+                        {order.customer?.name ? (
+                          <MuiLink
+                            component={Link}
+                            to={getCustomerSearchUrl(order.customer)}
+                            draggable={false}
+                            onClick={(e) => e.stopPropagation()}
+                            underline="hover"
+                            color="inherit"
+                            variant="body2"
+                            sx={{ fontWeight: 700, mb: 1.5, display: 'inline-block', '&:hover': { color: linkColor } }}
+                          >
+                            {order.customer.name}
+                          </MuiLink>
+                        ) : (
+                          <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                            N/A
+                          </Typography>
+                        )}
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="caption" color="textSecondary">
                             {new Date(order.createdAt).toLocaleDateString()}
                           </Typography>
 
-                          {/* Click-to-move quick actions for mobile accessibility */}
-                          <Stack direction="row" spacing={0.5}>
+                          {/* Click-to-move quick actions & direct edit link */}
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            <Tooltip title="Edit Order">
+                              <IconButton
+                                component={Link}
+                                to={`/orders/${order.id}/edit`}
+                                draggable={false}
+                                size="small"
+                                color="primary"
+                                onClick={(e) => e.stopPropagation()}
+                                sx={{ p: 0.25 }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                             {col.status !== OrderStatus.PENDING && (
                               <IconButton
                                 size="small"
@@ -648,7 +871,12 @@ export default function Orders() {
             paginationMode="server"
             sortingMode="server"
             paginationModel={paginationModel}
-            onPaginationModelChange={setPaginationModel}
+            onPaginationModelChange={(model) => {
+              updateOrderParams({
+                page: String(model.page + 1),
+                pageSize: String(model.pageSize)
+              });
+            }}
             sortModel={sortModel}
             onSortModelChange={setSortModel}
             pageSizeOptions={[5, 10, 20]}
@@ -667,12 +895,25 @@ export default function Orders() {
       )}
 
       {/* Inspect Order Details Dialog */}
-      <Dialog open={openDetail} onClose={() => setOpenDetail(false)} maxWidth="sm" fullWidth>
-        {selectedOrder && (
+      <Dialog open={openDetail} onClose={handleCloseDetail} maxWidth="sm" fullWidth>
+        {loadingDetail && !selectedOrder ? (
+          <Stack direction="row" sx={{ justifyContent: 'center', py: 8 }}>
+            <CircularProgress color="primary" />
+          </Stack>
+        ) : detailError && !selectedOrder ? (
+          <DialogContent sx={{ py: 4 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>{detailError}</Alert>
+            <Button variant="outlined" onClick={handleCloseDetail}>Close</Button>
+          </DialogContent>
+        ) : selectedOrder && (
           <>
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}`, gap: 1.5, flexWrap: 'wrap' }}>
               <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
-                Order Details ({selectedOrder.orderNumber})
+                Order Details (
+                <MuiLink component={Link} to={`/orders/${selectedOrder.id}`} underline="hover" color="inherit">
+                  {selectedOrder.orderNumber}
+                </MuiLink>
+                )
               </Typography>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Chip
@@ -701,7 +942,20 @@ export default function Orders() {
                 {selectedOrder.items?.map((item) => (
                   <Box key={item.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.item?.name}</Typography>
+                      {item.item?.id ? (
+                        <MuiLink
+                          component={Link}
+                          to={`/items?item=${item.item.id}`}
+                          underline="hover"
+                          color="inherit"
+                          variant="body2"
+                          sx={{ fontWeight: 700, display: 'block', '&:hover': { color: linkColor } }}
+                        >
+                          {item.item.name}
+                        </MuiLink>
+                      ) : (
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.item?.name}</Typography>
+                      )}
                       <Typography variant="caption" color="textSecondary">{item.quantity} x Rs. {parseFloat(item.priceAtOrder as any).toFixed(2)}</Typography>
                     </Box>
                     <Typography variant="body2" sx={{ fontWeight: 800 }}>
@@ -724,8 +978,20 @@ export default function Orders() {
               </Typography>
               <Grid container spacing={2} sx={{ mb: 2.5 }}>
                 <Grid size={6}>
-                  <Typography variant="caption" color="textSecondary">Name</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedOrder.customer?.name}</Typography>
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>Name</Typography>
+                  {selectedOrder.customer?.name ? (
+                    <MuiLink
+                      component={Link}
+                      to={getCustomerSearchUrl(selectedOrder.customer)}
+                      underline="hover"
+                      variant="body2"
+                      sx={{ fontWeight: 700, color: linkColor }}
+                    >
+                      {selectedOrder.customer.name}
+                    </MuiLink>
+                  ) : (
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>N/A</Typography>
+                  )}
                 </Grid>
                 <Grid size={6}>
                   <Typography variant="caption" color="textSecondary">Contact</Typography>
@@ -860,20 +1126,18 @@ export default function Orders() {
                 )}
 
                 <Button
+                  component={Link}
+                  to={`/orders/${selectedOrder.id}/edit`}
                   variant="contained"
                   size="small"
                   startIcon={<EditIcon />}
-                  onClick={() => {
-                    setOpenDetail(false);
-                    navigate(`/orders/${selectedOrder.id}/edit`);
-                  }}
                   sx={{ borderRadius: 2, bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' } }}
                 >
                   Edit Order
                 </Button>
               </Stack>
 
-              <Button variant="outlined" onClick={() => setOpenDetail(false)} sx={{ borderRadius: 3 }}>
+              <Button variant="outlined" onClick={handleCloseDetail} sx={{ borderRadius: 3 }}>
                 Close
               </Button>
             </DialogActions>

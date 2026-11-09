@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -33,16 +34,28 @@ interface OrderSource {
 
 export default function OrderSources() {
   const theme = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sources, setSources] = useState<OrderSource[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const editParamId = searchParams.get('edit');
+  const isNewParam = searchParams.get('new') === '1';
 
   // Dialog states
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const initializedModalRef = useRef<string | null>(null);
 
-  const fetchSources = () => {
+  const clearModalParams = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('edit');
+    next.delete('new');
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
+
+  const fetchSources = useCallback(() => {
     setLoading(true);
     api.get('/api/order-sources')
       .then((res) => {
@@ -53,24 +66,48 @@ export default function OrderSources() {
         console.error('Failed to load order sources', err);
         setLoading(false);
       });
-  };
+  }, []);
 
   useEffect(() => {
     fetchSources();
-  }, []);
+  }, [fetchSources]);
 
-  const handleOpenCreate = () => {
-    setIsEditMode(false);
-    setEditingId(null);
-    setName('');
-    setOpenDialog(true);
-  };
+  useEffect(() => {
+    if (editParamId) {
+      const key = `edit:${editParamId}`;
+      if (initializedModalRef.current === key) return;
+      const found = sources.find((s) => s.id === editParamId);
+      if (found) {
+        initializedModalRef.current = key;
+        setIsEditMode(true);
+        setEditingId(found.id);
+        setName(found.name);
+        setOpenDialog(true);
+      } else if (!loading && sources.length > 0) {
+        clearModalParams();
+      }
+      return;
+    }
 
-  const handleOpenEdit = (source: OrderSource) => {
-    setIsEditMode(true);
-    setEditingId(source.id);
-    setName(source.name);
-    setOpenDialog(true);
+    if (isNewParam) {
+      if (initializedModalRef.current !== 'new') {
+        initializedModalRef.current = 'new';
+        setIsEditMode(false);
+        setEditingId(null);
+        setName('');
+        setOpenDialog(true);
+      }
+      return;
+    }
+
+    initializedModalRef.current = null;
+    setOpenDialog(false);
+  }, [editParamId, isNewParam, sources, loading, clearModalParams]);
+
+  const handleCloseDialog = () => {
+    initializedModalRef.current = null;
+    setOpenDialog(false);
+    clearModalParams();
   };
 
   const handleSave = async () => {
@@ -85,7 +122,7 @@ export default function OrderSources() {
       } else {
         await api.post('/api/order-sources', { name });
       }
-      setOpenDialog(false);
+      handleCloseDialog();
       fetchSources();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error saving order source');
@@ -113,9 +150,10 @@ export default function OrderSources() {
         </Typography>
 
         <Button
+          component={Link}
+          to="/order-sources?new=1"
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={handleOpenCreate}
           sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}
         >
           Add Source
@@ -141,9 +179,10 @@ export default function OrderSources() {
                     secondaryAction={
                       <Stack direction="row" spacing={1}>
                         <IconButton
+                          component={Link}
+                          to={`/order-sources?edit=${source.id}`}
                           edge="end"
                           color="primary"
-                          onClick={() => handleOpenEdit(source)}
                           sx={{ '&:hover': { bgcolor: 'rgba(10, 59, 176, 0.08)' } }}
                         >
                           <EditIcon fontSize="small" />
@@ -185,7 +224,7 @@ export default function OrderSources() {
       </Card>
 
       {/* Create / Edit Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="xs" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h6" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Edit Order Source' : 'Add Order Source'}
@@ -205,7 +244,7 @@ export default function OrderSources() {
           </Box>
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
-          <Button variant="outlined" onClick={() => setOpenDialog(false)} sx={{ borderRadius: 3 }}>
+          <Button variant="outlined" onClick={handleCloseDialog} sx={{ borderRadius: 3 }}>
             Cancel
           </Button>
           <Button

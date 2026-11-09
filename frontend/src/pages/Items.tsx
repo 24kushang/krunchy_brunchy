@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -26,6 +27,7 @@ import {
   TableRow,
   IconButton,
   Tooltip,
+  Link as MuiLink,
   useTheme
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -101,14 +103,24 @@ export function getMarginChipProps(pct: number | null): {
 
 export default function Items() {
   const theme = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
+
+  const search = searchParams.get('search') || '';
+  const itemParamId = searchParams.get('item');
+  const isNewParam = searchParams.get('new') === '1';
+
+  const [searchInput, setSearchInput] = useState(search);
+  const lastCommittedSearchRef = useRef(search);
+
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
 
   // Dialog / Modal Form States
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const initializedModalKeyRef = useRef<string | null>(null);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -142,7 +154,38 @@ export default function Items() {
     }
   };
 
-  const fetchItems = () => {
+  const buildItemsParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(overrides).forEach(([key, val]) => {
+        if (val === null || val === undefined || val === '') {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
+      });
+      return next;
+    },
+    [searchParams]
+  );
+
+  const buildItemsUrl = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      const next = buildItemsParams(overrides);
+      const qs = next.toString();
+      return qs ? `/items?${qs}` : '/items';
+    },
+    [buildItemsParams]
+  );
+
+  const updateItemParams = useCallback(
+    (overrides: Record<string, string | null | undefined>) => {
+      setSearchParams(buildItemsParams(overrides));
+    },
+    [buildItemsParams, setSearchParams]
+  );
+
+  const fetchItems = useCallback(() => {
     setLoading(true);
     api.get(`/api/items?search=${encodeURIComponent(search)}`)
       .then((res) => {
@@ -153,22 +196,32 @@ export default function Items() {
         console.error('Failed to load items', err);
         setLoading(false);
       });
-  };
+  }, [search]);
 
   useEffect(() => {
     fetchItems();
-  }, []);
+  }, [fetchItems]);
 
-  // Debounced search
+  // Sync URL search back into input on Back/Forward
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchItems();
-    }, 450);
-    return () => clearTimeout(delayDebounceFn);
+    if (search !== lastCommittedSearchRef.current) {
+      lastCommittedSearchRef.current = search;
+      setSearchInput(search);
+    }
   }, [search]);
 
+  // Debounced search -> URL param
+  useEffect(() => {
+    if (searchInput === search) return;
+    const delayDebounceFn = setTimeout(() => {
+      lastCommittedSearchRef.current = searchInput;
+      updateItemParams({ search: searchInput || null });
+    }, 450);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchInput, search, updateItemParams]);
+
   // Load price history timeline
-  const fetchPriceHistory = (itemId: string) => {
+  const fetchPriceHistory = useCallback((itemId: string) => {
     setLoadingHistory(true);
     api.get(`/api/items/${itemId}/price-history`)
       .then((res) => {
@@ -179,9 +232,9 @@ export default function Items() {
         console.error(err);
         setLoadingHistory(false);
       });
-  };
+  }, []);
 
-  const handleOpenCreate = () => {
+  const populateCreate = useCallback(() => {
     setIsEditMode(false);
     setEditingItemId(null);
     setName('');
@@ -192,9 +245,9 @@ export default function Items() {
     setImageUrl('');
     setPriceHistory([]);
     setOpenDialog(true);
-  };
+  }, []);
 
-  const handleOpenEdit = (item: Item) => {
+  const populateEdit = useCallback((item: Item) => {
     setIsEditMode(true);
     setEditingItemId(item.id);
     setName(item.name);
@@ -207,6 +260,60 @@ export default function Items() {
     setEditingEntryId(null);
     setOpenDialog(true);
     fetchPriceHistory(item.id);
+  }, [fetchPriceHistory]);
+
+  // Sync modal with ?item=<id> or ?new=1
+  useEffect(() => {
+    if (itemParamId) {
+      const modalKey = `item:${itemParamId}`;
+      if (initializedModalKeyRef.current === modalKey) return;
+
+      const localMatch = items.find((i) => i.id === itemParamId);
+      if (localMatch) {
+        initializedModalKeyRef.current = modalKey;
+        populateEdit(localMatch);
+        return;
+      }
+
+      if (!loading) {
+        let cancelled = false;
+        api.get('/api/items')
+          .then((res) => {
+            if (cancelled) return;
+            const found = (res.data as Item[]).find((i) => i.id === itemParamId);
+            if (found) {
+              initializedModalKeyRef.current = modalKey;
+              populateEdit(found);
+            } else {
+              updateItemParams({ item: null });
+            }
+          })
+          .catch(() => {
+            if (!cancelled) updateItemParams({ item: null });
+          });
+        return () => {
+          cancelled = true;
+        };
+      }
+      return;
+    }
+
+    if (isNewParam) {
+      if (initializedModalKeyRef.current !== 'new') {
+        initializedModalKeyRef.current = 'new';
+        populateCreate();
+      }
+      return;
+    }
+
+    initializedModalKeyRef.current = null;
+    setOpenDialog(false);
+  }, [itemParamId, isNewParam, loading, items, populateCreate, populateEdit, updateItemParams]);
+
+  const handleCloseDialog = () => {
+    initializedModalKeyRef.current = null;
+    setOpenDialog(false);
+    updateItemParams({ item: null, new: null });
   };
 
   // Google Drive File Upload Handler
@@ -253,7 +360,7 @@ export default function Items() {
       } else {
         await api.post('/api/items', payload);
       }
-      setOpenDialog(false);
+      handleCloseDialog();
       fetchItems();
     } catch (err: any) {
       console.error(err);
@@ -309,17 +416,18 @@ export default function Items() {
           label="Search inventory items..."
           variant="outlined"
           size="small"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           sx={{ width: { xs: '100%', sm: 300 } }}
           slotProps={{ input: { endAdornment: <SearchIcon color="action" /> } }}
         />
 
         <Button
+          component={Link}
+          to={buildItemsUrl({ new: '1', item: null })}
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
-          onClick={handleOpenCreate}
           sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' } }}
         >
           Add Catalog Item
@@ -345,17 +453,25 @@ export default function Items() {
                 }}
               >
                 {item.imageUrl ? (
-                  <CardMedia component="img" height="160" image={item.imageUrl} alt={item.name} />
+                  <Box component={Link} to={buildItemsUrl({ item: item.id, new: null })} sx={{ display: 'block', textDecoration: 'none' }}>
+                    <CardMedia component="img" height="160" image={item.imageUrl} alt={item.name} />
+                  </Box>
                 ) : (
-                  <Box sx={{ height: 160, bgcolor: 'rgba(255, 90, 9, 0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box component={Link} to={buildItemsUrl({ item: item.id, new: null })} sx={{ height: 160, bgcolor: 'rgba(255, 90, 9, 0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
                     <Typography variant="h2">🍿</Typography>
                   </Box>
                 )}
 
                 <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+                  <MuiLink
+                    component={Link}
+                    to={buildItemsUrl({ item: item.id, new: null })}
+                    underline="hover"
+                    variant="h6"
+                    sx={{ fontWeight: 700, mb: 1, display: 'inline-block', color: 'inherit', '&:hover': { color: linkColor } }}
+                  >
                     {item.name}
-                  </Typography>
+                  </MuiLink>
 
                   {/* Pricing row */}
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
@@ -414,10 +530,11 @@ export default function Items() {
 
                 <Box sx={{ p: 2, pt: 0, display: 'flex', justifyContent: 'flex-end' }}>
                   <Button
+                    component={Link}
+                    to={buildItemsUrl({ item: item.id, new: null })}
                     size="small"
                     variant="outlined"
                     startIcon={<EditIcon />}
-                    onClick={() => handleOpenEdit(item)}
                     sx={{ borderRadius: 2 }}
                   >
                     Edit / Price History
@@ -438,7 +555,7 @@ export default function Items() {
       )}
 
       {/* Dialog for Item Create / Update */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Typography variant="h5" sx={{ color: '#0A3BB0' }}>
             {isEditMode ? 'Update Inventory Item' : 'Introduce New Snack Item'}
@@ -708,7 +825,7 @@ export default function Items() {
           </Grid>
         </DialogContent>
         <DialogActions sx={{ borderTop: `1px solid ${theme.palette.divider}`, px: 3, py: 2 }}>
-          <Button variant="outlined" onClick={() => setOpenDialog(false)} sx={{ borderRadius: 3 }}>
+          <Button variant="outlined" onClick={handleCloseDialog} sx={{ borderRadius: 3 }}>
             Cancel
           </Button>
           <Button variant="contained" onClick={handleSave} sx={{ bgcolor: '#FF5A09', '&:hover': { bgcolor: '#E04E07' }, borderRadius: 3 }}>

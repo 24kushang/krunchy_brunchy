@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Box,
   Drawer,
@@ -40,7 +40,6 @@ const drawerWidth = 260;
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
-  const navigate = useNavigate();
   const location = useLocation();
   const { mode, toggleTheme } = useAppTheme();
   const { user, logout } = useAuth();
@@ -74,7 +73,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: mode === 'light' ? '#FFFFFF' : '#1A1918' }}>
       {/* Brand Header */}
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box
+        component={Link}
+        to="/orders"
+        onClick={() => setMobileOpen(false)}
+        sx={{
+          p: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          textDecoration: 'none',
+          color: 'inherit',
+        }}
+      >
         <Box
           sx={{
             width: 40,
@@ -122,14 +133,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Navigation List */}
       <List sx={{ px: 2, py: 3, flexGrow: 1 }}>
         {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive =
+            location.pathname === item.path ||
+            (item.path === '/orders' && location.pathname.startsWith('/orders/'));
           return (
             <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
               <ListItemButton
-                onClick={() => {
-                  navigate(item.path);
-                  setMobileOpen(false);
-                }}
+                component={Link}
+                to={item.path}
+                onClick={() => setMobileOpen(false)}
                 sx={{
                   borderRadius: 3,
                   py: 1.2,
@@ -243,7 +255,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               fontWeight: 700,
               color: mode === 'light' ? '#221D1A' : '#FAF6F0' }}
           >
-            {menuItems.find((item) => item.path === location.pathname)?.text || 'Krunchy Brunchy Operations'}
+            {location.pathname.match(/^\/orders\/[^/]+\/edit$/)
+              ? 'Edit Order'
+              : location.pathname.startsWith('/orders/')
+              ? 'Orders Dashboard'
+              : menuItems.find((item) => item.path === location.pathname)?.text || 'Krunchy Brunchy Operations'}
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

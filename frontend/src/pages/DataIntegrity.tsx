@@ -14,13 +14,14 @@ import {
   TableRow,
   TableCell,
   Alert,
+  Link as MuiLink,
   useTheme,
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EditIcon from '@mui/icons-material/Edit';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../utils/api';
 
 interface MismatchedOrderItem {
@@ -47,7 +48,7 @@ interface ReconciliationReport {
 
 export default function DataIntegrity() {
   const theme = useTheme();
-  const navigate = useNavigate();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
   const [report, setReport] = useState<ReconciliationReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState(false);
@@ -176,8 +177,22 @@ export default function DataIntegrity() {
                   <TableBody>
                     {report?.mismatchedOrders.map((o) => (
                       <TableRow key={o.id} hover>
-                        <TableCell sx={{ fontWeight: 700, borderColor }}>{o.orderNumber}</TableCell>
-                        <TableCell sx={{ borderColor }}>{o.customerName}</TableCell>
+                        <TableCell sx={{ fontWeight: 700, borderColor }}>
+                          <MuiLink component={Link} to={`/orders/${o.id}`} underline="hover" sx={{ color: linkColor, fontWeight: 800 }}>
+                            {o.orderNumber}
+                          </MuiLink>
+                        </TableCell>
+                        <TableCell sx={{ borderColor }}>
+                          <MuiLink
+                            component={Link}
+                            to={`/customers?search=${encodeURIComponent(o.customerName)}`}
+                            underline="hover"
+                            color="inherit"
+                            sx={{ '&:hover': { color: linkColor } }}
+                          >
+                            {o.customerName}
+                          </MuiLink>
+                        </TableCell>
                         <TableCell sx={{ borderColor }}>
                           {o.items.length === 0 ? (
                             <Chip label="No items" size="small" color="error" variant="outlined" />
@@ -200,9 +215,10 @@ export default function DataIntegrity() {
                         </TableCell>
                         <TableCell align="right" sx={{ borderColor }}>
                           <Button
+                            component={Link}
+                            to={`/orders/${o.id}/edit`}
                             size="small"
                             startIcon={<EditIcon fontSize="small" />}
-                            onClick={() => navigate(`/orders/${o.id}/edit`)}
                             sx={{ borderRadius: 2, textTransform: 'none' }}
                           >
                             Review & Fix

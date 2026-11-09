@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import Box from '@mui/material/Box';
@@ -35,14 +36,19 @@ interface User {
 }
 
 const UserManagement: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const editUserId = searchParams.get('edit');
+  const isNewParam = searchParams.get('new') === '1';
 
   // Dialog states
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const initializedModalRef = useRef<string | null>(null);
 
   // Form states
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -54,7 +60,14 @@ const UserManagement: React.FC = () => {
 
   const { user: currentUser } = useAuth();
 
-  const fetchUsers = async () => {
+  const clearModalParams = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('edit');
+    next.delete('new');
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
+
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -66,29 +79,62 @@ const UserManagement: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [fetchUsers]);
 
-  const handleOpenAdd = () => {
-    setName('');
-    setEmail('');
-    setPassword('');
-    setRole('Admin');
-    setFormError(null);
-    setOpenAddDialog(true);
+  useEffect(() => {
+    if (editUserId) {
+      const key = `edit:${editUserId}`;
+      if (initializedModalRef.current === key) return;
+      const found = users.find((u) => u.id === editUserId);
+      if (found) {
+        initializedModalRef.current = key;
+        setSelectedUser(found);
+        setName(found.name);
+        setEmail(found.email);
+        setPassword('');
+        setRole(found.role);
+        setFormError(null);
+        setOpenAddDialog(false);
+        setOpenEditDialog(true);
+      } else if (!isLoading && users.length > 0) {
+        clearModalParams();
+      }
+      return;
+    }
+
+    if (isNewParam) {
+      if (initializedModalRef.current !== 'new') {
+        initializedModalRef.current = 'new';
+        setName('');
+        setEmail('');
+        setPassword('');
+        setRole('Admin');
+        setFormError(null);
+        setOpenEditDialog(false);
+        setOpenAddDialog(true);
+      }
+      return;
+    }
+
+    initializedModalRef.current = null;
+    setOpenAddDialog(false);
+    setOpenEditDialog(false);
+  }, [editUserId, isNewParam, users, isLoading, clearModalParams]);
+
+  const handleCloseAdd = () => {
+    initializedModalRef.current = null;
+    setOpenAddDialog(false);
+    clearModalParams();
   };
 
-  const handleOpenEdit = (user: User) => {
-    setSelectedUser(user);
-    setName(user.name);
-    setEmail(user.email);
-    setPassword(''); // leave blank unless updating
-    setRole(user.role);
-    setFormError(null);
-    setOpenEditDialog(true);
+  const handleCloseEdit = () => {
+    initializedModalRef.current = null;
+    setOpenEditDialog(false);
+    clearModalParams();
   };
 
   const handleOpenDelete = (user: User) => {
@@ -105,7 +151,7 @@ const UserManagement: React.FC = () => {
     setFormError(null);
     try {
       await api.post('/api/users', { name, email, password, role });
-      setOpenAddDialog(false);
+      handleCloseAdd();
       fetchUsers();
     } catch (err: any) {
       console.error(err);
@@ -126,7 +172,7 @@ const UserManagement: React.FC = () => {
         payload.password = password; // Only send password if updated
       }
       await api.patch(`/api/users/${selectedUser?.id}`, payload);
-      setOpenEditDialog(false);
+      handleCloseEdit();
       fetchUsers();
     } catch (err: any) {
       console.error(err);
@@ -180,8 +226,9 @@ const UserManagement: React.FC = () => {
           User Management
         </Typography>
         <Button
+          component={Link}
+          to="/users?new=1"
           variant="contained"
-          onClick={handleOpenAdd}
           sx={{
             backgroundColor: '#FF5A09',
             textTransform: 'none',
@@ -241,7 +288,7 @@ const UserManagement: React.FC = () => {
                   </TableCell>
                   <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell align="right">
-                    <IconButton onClick={() => handleOpenEdit(u)} color="primary" sx={{ mr: 1 }}>
+                    <IconButton component={Link} to={`/users?edit=${u.id}`} color="primary" sx={{ mr: 1 }}>
                       <EditIcon />
                     </IconButton>
                     <IconButton
@@ -260,7 +307,7 @@ const UserManagement: React.FC = () => {
       )}
 
       {/* Add User Dialog */}
-      <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={openAddDialog} onClose={handleCloseAdd} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
           Add New User
         </DialogTitle>
@@ -309,7 +356,7 @@ const UserManagement: React.FC = () => {
             </TextField>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setOpenAddDialog(false)} sx={{ textTransform: 'none' }}>
+            <Button onClick={handleCloseAdd} sx={{ textTransform: 'none' }}>
               Cancel
             </Button>
             <Button
@@ -328,7 +375,7 @@ const UserManagement: React.FC = () => {
       </Dialog>
 
       {/* Edit User Dialog */}
-      <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog open={openEditDialog} onClose={handleCloseEdit} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ color: '#0A3BB0', fontWeight: 'bold' }}>
           Edit User
         </DialogTitle>
@@ -377,7 +424,7 @@ const UserManagement: React.FC = () => {
             </TextField>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
-            <Button onClick={() => setOpenEditDialog(false)} sx={{ textTransform: 'none' }}>
+            <Button onClick={handleCloseEdit} sx={{ textTransform: 'none' }}>
               Cancel
             </Button>
             <Button

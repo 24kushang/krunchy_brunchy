@@ -37,6 +37,7 @@ function AppContent() {
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Navigate to="/orders" replace />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/:id" element={<Orders />} />
         <Route path="/orders/:id/edit" element={<EditOrder />} />
         <Route path="/items" element={<Items />} />
         <Route path="/customers" element={<Customers />} />

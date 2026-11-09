@@ -25,8 +25,16 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Redirect back to the page they tried to visit, or fallback to /orders
-  const from = (location.state as any)?.from?.pathname || '/orders';
+  // Redirect back to the full URL (including query string) they tried to visit, or fallback to /orders
+  const stateFrom = (location.state as any)?.from;
+  const queryRedirect = new URLSearchParams(location.search).get('redirect');
+  const safeQueryRedirect =
+    queryRedirect && queryRedirect.startsWith('/') && !queryRedirect.startsWith('//')
+      ? queryRedirect
+      : null;
+  const from = stateFrom
+    ? `${stateFrom.pathname || '/orders'}${stateFrom.search || ''}${stateFrom.hash || ''}`
+    : safeQueryRedirect || '/orders';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -13,6 +14,7 @@ import {
   CircularProgress,
   Grid,
   Divider,
+  Link as MuiLink,
   useTheme
 } from '@mui/material';
 import {
@@ -53,13 +55,26 @@ interface Template {
 
 export default function WhatsappHub() {
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState(0); // 0 = Live Logs, 1 = Templates
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
+  const activeTab = searchParams.get('tab') === 'templates' ? 1 : 0; // 0 = Live Logs, 1 = Templates
   const [logs, setLogs] = useState<WhatsappLog[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  const fetchLogs = () => {
+  const buildWhatsappUrl = useCallback(
+    (tab: number) => {
+      const next = new URLSearchParams(searchParams);
+      if (tab === 1) next.set('tab', 'templates');
+      else next.delete('tab');
+      const qs = next.toString();
+      return qs ? `/whatsapp?${qs}` : '/whatsapp';
+    },
+    [searchParams]
+  );
+
+  const fetchLogs = useCallback(() => {
     setLoading(true);
     api.get('/api/whatsapp/logs')
       .then((res) => {
@@ -70,9 +85,9 @@ export default function WhatsappHub() {
         console.error(err);
         setLoading(false);
       });
-  };
+  }, []);
 
-  const fetchTemplates = () => {
+  const fetchTemplates = useCallback(() => {
     setLoading(true);
     api.get('/api/whatsapp/templates')
       .then((res) => {
@@ -83,7 +98,7 @@ export default function WhatsappHub() {
         console.error(err);
         setLoading(false);
       });
-  };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 0) {
@@ -91,7 +106,7 @@ export default function WhatsappHub() {
     } else {
       fetchTemplates();
     }
-  }, [activeTab]);
+  }, [activeTab, fetchLogs, fetchTemplates]);
 
   const handleRetry = async (logId: string) => {
     setRetryingId(logId);
@@ -152,8 +167,45 @@ export default function WhatsappHub() {
 
   const columns: GridColDef[] = [
     { field: 'timestamp', headerName: 'Dispatched At', width: 180, renderCell: (params) => new Date(params.value).toLocaleString() },
-    { field: 'orderNumber', headerName: 'Associated Order', width: 140, valueGetter: (_value, row) => row.order?.orderNumber || 'N/A' },
-    { field: 'recipientName', headerName: 'Recipient Name', width: 170 },
+    {
+      field: 'orderNumber',
+      headerName: 'Associated Order',
+      width: 140,
+      valueGetter: (_value, row) => row.order?.orderNumber || 'N/A',
+      renderCell: (params) =>
+        params.row.order?.id ? (
+          <MuiLink
+            component={Link}
+            to={`/orders/${params.row.order.id}`}
+            onClick={(e) => e.stopPropagation()}
+            underline="hover"
+            variant="body2"
+            sx={{ fontWeight: 800, color: linkColor }}
+          >
+            {params.value}
+          </MuiLink>
+        ) : (
+          'N/A'
+        )
+    },
+    {
+      field: 'recipientName',
+      headerName: 'Recipient Name',
+      width: 170,
+      renderCell: (params) => (
+        <MuiLink
+          component={Link}
+          to={`/customers?search=${encodeURIComponent(params.row.recipientContact || params.row.recipientName || '')}`}
+          onClick={(e) => e.stopPropagation()}
+          underline="hover"
+          color="inherit"
+          variant="body2"
+          sx={{ '&:hover': { color: linkColor } }}
+        >
+          {params.value}
+        </MuiLink>
+      )
+    },
     { field: 'recipientContact', headerName: 'Contact Number', width: 150 },
     { field: 'triggeringEvent', headerName: 'Trigger Event', width: 190 },
     {
@@ -231,7 +283,13 @@ export default function WhatsappHub() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Tabs
           value={activeTab}
-          onChange={(_e, val) => setActiveTab(val)}
+          onChange={(e, val) => {
+            if (e?.type === 'click') return;
+            const next = new URLSearchParams(searchParams);
+            if (val === 1) next.set('tab', 'templates');
+            else next.delete('tab');
+            setSearchParams(next);
+          }}
           sx={{
             bgcolor: theme.palette.mode === 'light' ? '#FAF6F0' : '#222120',
             borderRadius: 3,
@@ -239,8 +297,22 @@ export default function WhatsappHub() {
             minHeight: 0,
             '& .MuiTabs-indicator': { display: 'none' } }}
         >
-          <Tab icon={<LogsIcon sx={{ fontSize: 18 }} />} label="Live Dispatch Logs" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#0A3BB0', color: '#FFF' } }} />
-          <Tab icon={<TemplatesIcon sx={{ fontSize: 18 }} />} label="Approved Templates" sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#0A3BB0', color: '#FFF' } }} />
+          <Tab
+            component={Link}
+            to={buildWhatsappUrl(0)}
+            value={0}
+            icon={<LogsIcon sx={{ fontSize: 18 }} />}
+            label="Live Dispatch Logs"
+            sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#0A3BB0', color: '#FFF' } }}
+          />
+          <Tab
+            component={Link}
+            to={buildWhatsappUrl(1)}
+            value={1}
+            icon={<TemplatesIcon sx={{ fontSize: 18 }} />}
+            label="Approved Templates"
+            sx={{ minHeight: 0, py: 1, borderRadius: 2, '&.Mui-selected': { bgcolor: '#0A3BB0', color: '#FFF' } }}
+          />
         </Tabs>
 
         <IconButton

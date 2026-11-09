@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -29,6 +29,7 @@ import {
   useTheme,
   Switch,
   FormControlLabel,
+  Link as MuiLink,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
@@ -58,6 +59,7 @@ export default function EditOrder() {
   const theme = useTheme();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const linkColor = theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF';
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -74,6 +76,7 @@ export default function EditOrder() {
   const [orderStatus, setOrderStatus] = useState('Pending');
   
   // Customer Info
+  const [customerId, setCustomerId] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [noContact, setNoContact] = useState(false);
   const [customerName, setCustomerName] = useState('');
@@ -140,6 +143,7 @@ export default function EditOrder() {
 
         // Customer
         if (order.customer) {
+          setCustomerId(order.customer.id || '');
           setCustomerContact(order.customer.contact || '');
           setNoContact(!order.customer.contact);
           setCustomerName(order.customer.name || '');
@@ -329,19 +333,27 @@ export default function EditOrder() {
   return (
     <Box sx={{ pb: 8 }}>
       {/* Top Navigation & Action Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Button
+            component={Link}
+            to="/orders"
             variant="outlined"
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate('/orders')}
             sx={{ borderRadius: 3 }}
           >
             Back to Orders
           </Button>
           <Box>
             <Typography variant="h4" sx={{ color: '#0A3BB0', fontWeight: 800 }}>
-              Edit Order #{orderNumber}
+              Edit Order #
+              {id ? (
+                <MuiLink component={Link} to={`/orders/${id}`} underline="hover" color="inherit">
+                  {orderNumber}
+                </MuiLink>
+              ) : (
+                orderNumber
+              )}
             </Typography>
             <Typography variant="body2" color="textSecondary">
               Update transition dates, payment received date, customer details, and item prices.
@@ -393,9 +405,22 @@ export default function EditOrder() {
             {/* Customer Details Card */}
             <Card sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
               <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ color: '#0A3BB0', fontWeight: 800, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PersonIcon color="primary" /> Customer Profile & Details
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="h6" sx={{ color: '#0A3BB0', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon color="primary" /> Customer Profile & Details
+                  </Typography>
+                  {customerId && (
+                    <MuiLink
+                      component={Link}
+                      to={`/customers?edit=${customerId}`}
+                      underline="hover"
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: linkColor }}
+                    >
+                      Open Customer Profile →
+                    </MuiLink>
+                  )}
+                </Box>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
@@ -745,7 +770,15 @@ export default function EditOrder() {
                       {cartItems.map((item, idx) => (
                         <TableRow key={item.itemId}>
                           <TableCell sx={{ fontWeight: 700, fontSize: '0.82rem' }}>
-                            {item.name}
+                            <MuiLink
+                              component={Link}
+                              to={`/items?item=${item.itemId}`}
+                              underline="hover"
+                              color="inherit"
+                              sx={{ '&:hover': { color: linkColor } }}
+                            >
+                              {item.name}
+                            </MuiLink>
                           </TableCell>
                           <TableCell align="center">
                             <TextField

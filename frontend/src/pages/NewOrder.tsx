@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -24,7 +25,8 @@ import {
   Chip,
   useTheme,
   InputLabel,
-  Switch
+  Switch,
+  Link as MuiLink
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -583,6 +585,9 @@ export default function NewOrder() {
                   />
                 ) : (
                   <Chip
+                    component={Link}
+                    to={selectedCustomer ? `/customers?edit=${selectedCustomer.id}` : '/customers'}
+                    clickable
                     label="Linked to Database Customer Profile"
                     color="success"
                     variant="outlined"
@@ -959,7 +964,17 @@ export default function NewOrder() {
             Order Placed!
           </Typography>
           <Typography variant="body1" sx={{ mb: 3 }}>
-            Order **{createdOrderNumber}** has been successfully generated. Click below to send the WhatsApp confirmation now, or skip to log it as pending.
+            Order{' '}
+            <MuiLink
+              component={Link}
+              to={`/orders/${createdOrderId}`}
+              onClick={() => setShowSuccess(false)}
+              underline="hover"
+              sx={{ fontWeight: 800, color: theme.palette.mode === 'light' ? '#0A3BB0' : '#7CA1FF' }}
+            >
+              {createdOrderNumber}
+            </MuiLink>{' '}
+            has been successfully generated. Click below to send the WhatsApp confirmation now, or skip to log it as pending.
           </Typography>
           <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
             <Button
